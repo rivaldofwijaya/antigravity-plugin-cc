@@ -75,7 +75,7 @@ Job ids look like `agy-<id>`; conversation ids are UUIDs. `status`, `result`, an
 
 ## Credits
 
-Built and maintained by **[Idun Labs](https://github.com/Idun-Group)**, makers of an [open-source platform for governing AI agents in production](https://idunplatform.com). Inspired by [`openai/codex-plugin-cc`](https://github.com/openai/codex-plugin-cc). [Antigravity CLI docs](https://antigravity.google/docs/cli-overview).
+Forked from [`Idun-Group/antigravity-plugin-cc`](https://github.com/Idun-Group/antigravity-plugin-cc), which was in turn inspired by [`openai/codex-plugin-cc`](https://github.com/openai/codex-plugin-cc). [Antigravity CLI docs](https://antigravity.google/docs/cli-overview).
 
 Licensed under [MIT](./LICENSE). PRs welcome.
 
