@@ -3,7 +3,7 @@
 > Drive Google's Antigravity CLI (`agy`, powered by Gemini 3.5) without leaving Claude Code.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
-[![Built by Idun Labs](https://img.shields.io/badge/built%20by-Idun%20Labs-6E56CF.svg)](https://github.com/Idun-Group)
+[![Fork of Idun-Group/antigravity-plugin-cc](https://img.shields.io/badge/fork%20of-Idun--Group%2Fantigravity--plugin--cc-6E56CF.svg)](https://github.com/Idun-Group/antigravity-plugin-cc)
 [![Powered by agy / Gemini 3.5](https://img.shields.io/badge/powered%20by-agy%20%2F%20Gemini%203.5-4285F4.svg)](https://antigravity.google/docs/cli-overview)
 
 A Claude Code plugin that hands work to `agy`, Google's Antigravity CLI, and brings the result back into your session. Use Gemini 3.5 for a second opinion on a diff, or to run a task in parallel while you keep working. It runs on its own quota, so it doesn't draw down your Claude Code usage.
