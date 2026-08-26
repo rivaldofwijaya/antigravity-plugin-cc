@@ -37,15 +37,15 @@ a Google account, or any network access. Everything is offline.
    - macOS/Linux: `curl -fsSL https://antigravity.google/cli/install.sh | bash`
      (lands in `~/.local/bin/agy`)
    - Windows: `irm https://antigravity.google/cli/install.ps1 | iex`
-2. Sign in once, interactively. Auth is keyring/browser OAuth — there is no API
-   key for the preview tier. In Claude Code, type `! agy` and complete the
+2. Sign in once, interactively. Auth is keyring/browser OAuth; there is no
+   API key for the preview tier. In Claude Code, type `! agy` and complete the
    Google login. The plugin never authenticates for you.
 3. Add this checkout as a local marketplace:
    `/plugin marketplace add /absolute/path/to/antigravity-plugin-cc`
 4. Try `/antigravity:setup`, then `/antigravity:delegate`, `/antigravity:review`,
    and `/antigravity:resume`.
 
-Heads up: the preview tier has a quota. When it's exhausted, `agy` exits 0 with
+The preview tier has a quota. When it's exhausted, `agy` exits 0 with
 empty stdout and the companion surfaces the `RESOURCE_EXHAUSTED (429)` line from
 the `--log-file`. That's expected behavior, not a bug.
 
@@ -53,9 +53,9 @@ the `--log-file`. That's expected behavior, not a bug.
 
 `docs/antigravity-cli-reference.md` and `scripts/lib/agy.mjs` describe the same
 thing: how we invoke `agy` and parse its output. If `agy` changes a flag, the
-log format, or its quota behavior, update **both** in the same PR. A drift
-between the doc and the code is the one thing that will quietly break this
-plugin for everyone.
+log format, or its quota behavior, update **both** in the same PR. When the doc
+and the code disagree, the plugin breaks in ways that are hard to trace back to
+the cause.
 
 A few facts that must stay true (don't contradict them):
 
@@ -72,7 +72,8 @@ A few facts that must stay true (don't contradict them):
   If you reach for a package, find another way.
 - Match the surrounding style: small functions, early returns, clear names.
 - Command/agent/skill files follow the Claude Code conventions already in the
-  repo — copy the frontmatter shape from an existing file rather than inventing.
+  repo. Copy the frontmatter shape from an existing file rather than inventing
+  one.
 - Voice in user-facing text: crisp and concrete, lead with what the user gets,
   honest about limits (preview quota, browser auth), no hype words.
 
@@ -81,10 +82,11 @@ A few facts that must stay true (don't contradict them):
 1. Fork and branch off `main` (`git checkout -b fix/clearer-quota-message`).
 2. Make the change. Run `npm test`. Add or update a test when behavior changes.
 3. If you touched the `agy` contract, update the doc and `lib/agy.mjs` together.
-4. Keep the PR focused — one concern per PR is easiest to review.
+4. Keep the PR focused. One concern per PR is easiest to review.
 5. Open the PR with a short description of what changed and why. Mention whether
    you tested against real `agy` or only the fixture.
 
-Questions or ideas? Open an issue first — happy to talk it through.
+Questions or ideas? Open an issue first. Happy to talk it through.
 
-Licensed MIT. Built and maintained by [Idun Labs](https://idunplatform.com).
+Licensed MIT. Forked from
+[Idun-Group/antigravity-plugin-cc](https://github.com/Idun-Group/antigravity-plugin-cc).
