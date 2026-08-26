@@ -20,8 +20,8 @@ A Claude Code plugin that hands work to `agy` — Google's Antigravity CLI — a
 Seven slash commands, all under the `/antigravity:` namespace. Each one shells out to a small Node companion that wraps `agy` in headless (`-p`) mode and manages background jobs.
 
 - **`/antigravity:setup`** — check that `agy` is installed, find its binary and version, and get a best-effort read on whether you're signed in. Never logs you in.
-- **`/antigravity:delegate`** — hand a task to Gemini 3.5. Write-capable by default; can be sandboxed or made read-only, and can run in the background.
-- **`/antigravity:review`** — read-only cross-model review of your current diff (or `base...HEAD`). Sandboxed.
+- **`/antigravity:delegate`** — hand a task to Gemini 3.5. Write-capable by default; `--read-only` contains it, and it can run in the background.
+- **`/antigravity:review`** — contained cross-model review of your current diff (or `base...HEAD`). Sandboxed, with a no-write instruction in the prompt.
 - **`/antigravity:resume`** — continue the most recent Antigravity conversation (or a specific one) with a follow-up.
 - **`/antigravity:status`** — list background jobs for this repo, or inspect one.
 - **`/antigravity:result`** — print the final output of a finished job, plus the conversation id and a resume hint.
@@ -86,7 +86,7 @@ In Claude Code you can do this without leaving the session — type `! agy`, com
 
 ### `/antigravity:review` ⭐
 
-Cross-model review of your working tree. Read-only and sandboxed — `agy` reads the diff, it doesn't touch your files.
+Cross-model review of your working tree. Contained: `agy` runs under its OS sandbox with an explicit no-write instruction and works from the diff embedded in the prompt, so it reports rather than edits. Your diff is sent to Google as part of that prompt.
 
 ```text
 /antigravity:review
@@ -98,7 +98,7 @@ Returns Gemini 3.5's review of the embedded diff. Pair it with your own review f
 
 ### `/antigravity:delegate` ⭐
 
-Hand a task to Gemini 3.5. Write-capable by default — it can edit files and run commands — so contain it when you want to.
+Hand a task to Gemini 3.5. Write-capable by default — it can edit files and run commands with permissions auto-approved — so contain it with `--read-only` when you want to.
 
 ```text
 /antigravity:delegate add a --json flag to the export command and update the tests
@@ -147,7 +147,7 @@ Continue the last Antigravity conversation (or a specific one) with a follow-up.
 
 The plugin is a thin layer over `agy`'s headless mode. Honestly, most of the value is in the plumbing:
 
-- **Headless delegation.** Commands run `agy -p "<task>"` and stream the result back. `delegate` is write-capable; `review` is sandboxed and read-only.
+- **Headless delegation.** Commands run `agy -p "<task>"` and stream the result back. `delegate` is write-capable; `review` is sandboxed with a no-write instruction. Containment is defence in depth, not a hard guarantee — `agy` has no true read-only mode, so verify with `git status` when it matters.
 - **Background jobs.** `--background` spawns a detached run, tracks it per-repo, and lets you poll with `status` / collect with `result` / stop with `cancel`.
 - **Error surfacing — the differentiator.** On quota exhaustion, `agy` exits `0` with **empty stdout** — success-looking, but nothing happened. The companion scans `agy`'s `--log-file` to catch that case and surface the real signal: `RESOURCE_EXHAUSTED (429) … Resets in <duration>`, auth failures, and backend errors that the exit code hides. It also recovers the **conversation id** from the log so `resume` and `result` actually work.
 

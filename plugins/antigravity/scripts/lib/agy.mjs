@@ -9,6 +9,26 @@ import { spawn, spawnSync } from "node:child_process";
 import { openSync, readFileSync, existsSync } from "node:fs";
 
 /**
+ * Prepended to the prompt on any contained run (`--read-only`, and every
+ * `review`).
+ *
+ * `agy` has no read-only mode of its own: `--sandbox` is an OS sandbox
+ * (nsjail / sandbox-exec / AppContainer), not a write barrier, and
+ * `--dangerously-skip-permissions` has to stay on or print mode cannot act at
+ * all. So containment is defence in depth — the OS sandbox plus this
+ * instruction. Neither alone is a guarantee; say so rather than implying one.
+ */
+export const READ_ONLY_PREAMBLE = [
+  "READ-ONLY RUN. You are operating in inspect-only mode.",
+  "Do not create, modify, move, or delete any file. Do not run any command that",
+  "changes state on this machine or anywhere else. Report what you find and what",
+  "you would change, as text. If the task below asks you to make changes, describe",
+  "the change you would make instead of making it.",
+  "",
+  "--- task ---",
+].join("\n");
+
+/**
  * @param {object} opts
  * @param {string} opts.prompt
  * @param {string[]} [opts.addDirs]

@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { parseArgs, hasFlag } from "./lib/args.mjs";
 import { resolveAgyBinary, agyConfigDir } from "./lib/paths.mjs";
 import {
+  READ_ONLY_PREAMBLE,
   buildPrintArgs,
   runForeground,
   spawnBackground,
@@ -136,7 +137,10 @@ function runAgyTask(parsed, { kind, title, prompt, readOnly, resume }) {
   const cwd = process.cwd();
 
   const sandbox = hasFlag(parsed, "sandbox") || Boolean(readOnly);
-  const yolo = !hasFlag(parsed, "no-yolo"); // write-capable by default; contained if sandbox
+  // Write-capable by default for a delegate the user explicitly asked for; agy
+  // needs --dangerously-skip-permissions to act at all in print mode. The
+  // unprompted path is closed in the subagent, not here.
+  const yolo = !hasFlag(parsed, "no-yolo");
   const continueLast = resume && !parsed.valued.conversation ? true : hasFlag(parsed, "continue");
   const conversationId = parsed.valued.conversation || null;
   const printTimeout = parsed.valued["print-timeout"] || "10m";
@@ -149,7 +153,9 @@ function runAgyTask(parsed, { kind, title, prompt, readOnly, resume }) {
     );
   }
 
-  const finalPrompt = clampPrompt(prompt);
+  // A contained run gets its no-write directive prepended BEFORE clamping, so the
+  // instruction survives even when a large prompt is truncated from the tail.
+  const finalPrompt = clampPrompt(readOnly ? `${READ_ONLY_PREAMBLE}\n${prompt}` : prompt);
   const background = hasFlag(parsed, "background");
 
   const job = createJob({ kind, title, prompt: finalPrompt, cwd, conversationId });
