@@ -12,6 +12,8 @@
 //   json-auth          -> {"status":"ERROR", error: signed-out...}, exit 0
 //   legacy-flag-error  -> rejects --output-format like a pre-1.1 binary (exit 2),
 //                         behaves as `success` once the flag is gone
+//   flag-error-stdout  -> rejects --output-format with non-empty stdout (exit 2),
+//                         behaves as `success` once the flag is gone
 //   noisy-log-success  -> text success PLUS 1.1 startup auth noise in the log
 //   wrapped-quota      -> empty stdout, 1.1 wrapper-prefixed quota line in the log
 //
@@ -92,6 +94,14 @@ if (mode === "legacy-flag-error" && wantsJson) {
 }
 
 if (mode === "legacy-flag-error") succeed();
+
+if (mode === "flag-error-stdout" && wantsJson) {
+  process.stdout.write("partial output before flag rejection\n");
+  process.stderr.write("flag provided but not defined: -output-format\n");
+  process.exit(2);
+}
+
+if (mode === "flag-error-stdout") succeed();
 
 if (mode === "quota") {
   writeLog(
