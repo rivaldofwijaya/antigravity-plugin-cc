@@ -14,7 +14,7 @@ Internal contract for the `antigravity:antigravity-pair` subagent. Not user-faci
 node "${CLAUDE_PLUGIN_ROOT}/scripts/antigravity.mjs" delegate "<task>" [flags]
 ```
 
-`delegate` hands the task to Google's Antigravity CLI (`agy`, Gemini 3.5) non-interactively via `agy -p`. It is **write-capable by default** — it can edit files and run commands in this repo. Contain it with `--read-only` or `--sandbox` when the task should not mutate the working tree.
+`delegate` hands the task to Google's Antigravity CLI (`agy`) non-interactively via `agy -p`. It is **write-capable by default** — Antigravity can edit files and run commands in this repo. Contain it with `--read-only`, `--sandbox`, or `--plan` when the task should not mutate the working tree, while remembering that containment is defence in depth rather than a hard write barrier.
 
 ## The one rule: thin forwarder
 
@@ -32,16 +32,19 @@ The companion owns binary detection, sandboxing, timeouts, the conversation id, 
 | Flag | Effect |
 |------|--------|
 | `--background` | Spawn a background job; returns a job id instead of blocking. |
-| `--sandbox` | Run contained — no host writes. |
-| `--read-only` | Allow reads, block edits/commands. |
+| `--sandbox` | Ask `agy` to contain the run from the real tree. |
+| `--read-only` | Add `--sandbox` plus an explicit no-write preamble. |
+| `--plan` | Ask Antigravity for a plan via `--mode plan`, with `--sandbox`. |
+| `--model <id>` | Select a model for this run. |
+| `--effort low\|medium\|high` | Select reasoning effort for this run. |
 | `--continue`, `-c` | Continue the most recent Antigravity conversation. |
 | `--conversation <id>` | Continue a specific conversation by id. |
 | `--add-dir <path>` | Grant access to an extra directory (repeatable). |
 | `--print-timeout <go-dur>` | Cap the print-mode run, e.g. `10m`, `90s`. |
 
-## No model flag — ever
+## Model and planning controls
 
-`agy` has **no** `--model` / `-m` flag. The model (default Gemini 3.5 Flash) is selected with `/model` inside the `agy` TUI and persisted in `settings.json`. Never add a model flag to a `delegate` call and never tell the user to pass one.
+Use `--model <id>` for a per-run model selection and `--effort low|medium|high` for its reasoning effort. The companion passes `--model` through unvalidated because `agy`'s own rejection enumerates every available model. With no `--model`, `agy` uses the user's default selected with `/model` inside the TUI. Use `--plan` when the requested result is a plan rather than a change; the companion forwards it as `--mode plan` plus `--sandbox`.
 
 ## Other subcommands (not for this subagent)
 

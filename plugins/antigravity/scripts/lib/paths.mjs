@@ -80,7 +80,7 @@ export function agyConfigDir(env = process.env) {
   return join(homeFor(env), ".gemini", "antigravity-cli");
 }
 
-/** Directory where agy persists conversation threads (`<id>.pb`). */
+/** Directory where agy persists conversation threads (`<id>.db` on 1.1, `<id>.pb` on 1.0). */
 export function agyConversationsDir(env = process.env) {
   return join(agyConfigDir(env), "conversations");
 }

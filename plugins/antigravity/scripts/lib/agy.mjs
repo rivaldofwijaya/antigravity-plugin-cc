@@ -38,6 +38,11 @@ export const READ_ONLY_PREAMBLE = [
  * @param {string}  [opts.conversationId]  --conversation <id>
  * @param {string}  [opts.logFile]         --log-file <path>
  * @param {string}  [opts.printTimeout]    --print-timeout <go-dur>, e.g. "10m"
+ * @param {boolean} [opts.jsonOutput=true] --output-format json
+ * @param {boolean} [opts.disableSlashCommands=true] --disable-slash-commands
+ * @param {string}  [opts.model]           --model <id>; never defaulted
+ * @param {string}  [opts.effort]          --effort low|medium|high
+ * @param {string}  [opts.mode]            --mode accept-edits|plan
  * @returns {string[]}
  */
 export function buildPrintArgs(opts) {
@@ -51,9 +56,41 @@ export function buildPrintArgs(opts) {
   if (opts.conversationId) args.push("--conversation", opts.conversationId);
   if (opts.logFile) args.push("--log-file", opts.logFile);
   if (opts.printTimeout) args.push("--print-timeout", opts.printTimeout);
+  if (opts.jsonOutput !== false) args.push("--output-format", "json");
+  // Every print run. `review` embeds an arbitrary git diff and `delegate`
+  // embeds arbitrary user text; a diff line starting with `/` is trivially
+  // plantable and would otherwise be eligible for slash-command or skill
+  // expansion inside a write-capable agent. There is no opt-out for callers:
+  // the companion never needs agy-side slash commands.
+  if (opts.disableSlashCommands !== false) args.push("--disable-slash-commands");
+  // Never defaulted: an unset model means the user's own agy default.
+  if (opts.model) args.push("--model", opts.model);
+  if (opts.effort) args.push("--effort", opts.effort);
+  if (opts.mode) args.push("--mode", opts.mode);
   args.push("-p", opts.prompt);
   return args;
 }
+
+/**
+ * Remove the flags a pre-1.1 `agy` does not know about. `--model`, `--effort`
+ * and `--mode` are deliberately NOT stripped: those are explicit user requests,
+ * and an old binary rejecting them must surface as an error the user sees, not
+ * as a silent downgrade to a different model.
+ */
+export function stripProbeFlags(args) {
+  const out = [];
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] === "--output-format") {
+      i += 1; // skip its value
+      continue;
+    }
+    if (args[i] === "--disable-slash-commands") continue;
+    out.push(args[i]);
+  }
+  return out;
+}
+
+const FLAG_REJECTION_RE = /flag provided but not defined|not defined: --|unknown flag|invalid flag/i;
 
 /** Parse a Go duration string ("5m0s", "90s", "10m") to milliseconds. Fallback 5m. */
 export function goDurationToMs(value, fallbackMs = 5 * 60 * 1000) {
@@ -83,14 +120,7 @@ function readLogSafe(logFile) {
   return "";
 }
 
-/**
- * Run agy print mode synchronously (foreground) with a hard watchdog timeout in
- * addition to agy's own --print-timeout.
- *
- * @returns {{ stdout: string, stderr: string, code: number|null, signal: string|null,
- *             timedOut: boolean, logText: string, logFile: string|undefined, error?: string }}
- */
-export function runForeground({ bin, args, cwd, logFile, watchdogMs }) {
+function spawnOnce({ bin, args, cwd, watchdogMs }) {
   const res = spawnSync(bin, args, {
     cwd,
     encoding: "utf8",
@@ -99,7 +129,6 @@ export function runForeground({ bin, args, cwd, logFile, watchdogMs }) {
     maxBuffer: 256 * 1024 * 1024,
     stdio: ["ignore", "pipe", "pipe"],
   });
-
   const timedOut = res.error && /ETIMEDOUT/i.test(String(res.error.code || res.error.message || ""));
   return {
     stdout: res.stdout || "",
@@ -107,10 +136,42 @@ export function runForeground({ bin, args, cwd, logFile, watchdogMs }) {
     code: res.status,
     signal: res.signal || null,
     timedOut: Boolean(timedOut),
-    logText: readLogSafe(logFile),
-    logFile,
     error: res.error && !timedOut ? String(res.error.message || res.error.code) : undefined,
   };
+}
+
+/**
+ * Run agy print mode synchronously (foreground) with a hard watchdog timeout in
+ * addition to agy's own --print-timeout.
+ *
+ * Retries ONCE without the 1.1-only probe flags if the binary rejects them, so
+ * an older agy degrades to the text+log path instead of failing outright. The
+ * retry is gated on a flag-parse stderr pattern AND empty stdout, so it cannot
+ * mask a real failure. The downgrade note goes to stderr — stdout is Markdown
+ * relayed verbatim to the user and must stay free of diagnostics.
+ *
+ * @returns {{ stdout: string, stderr: string, code: number|null, signal: string|null,
+ *             timedOut: boolean, downgraded: boolean, logText: string,
+ *             logFile: string|undefined, error?: string }}
+ */
+export function runForeground({ bin, args, cwd, logFile, watchdogMs }) {
+  let res = spawnOnce({ bin, args, cwd, watchdogMs });
+  let downgraded = false;
+
+  const rejectedAFlag =
+    res.code !== 0 && !res.timedOut && !res.stdout.trim() && FLAG_REJECTION_RE.test(res.stderr || "");
+  const stripped = rejectedAFlag ? stripProbeFlags(args) : args;
+
+  if (rejectedAFlag && stripped.length !== args.length) {
+    process.stderr.write(
+      "[antigravity-plugin-cc] note: this agy rejected --output-format/--disable-slash-commands; " +
+        "retrying without them and falling back to log parsing. Update with `agy update` for full fidelity.\n",
+    );
+    res = spawnOnce({ bin, args: stripped, cwd, watchdogMs });
+    downgraded = true;
+  }
+
+  return { ...res, downgraded, logText: readLogSafe(logFile), logFile };
 }
 
 /**
