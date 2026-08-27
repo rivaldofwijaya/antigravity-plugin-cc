@@ -24,6 +24,7 @@ import {
 } from "./lib/agy.mjs";
 import { classifyRun } from "./lib/result.mjs";
 import { resolveReviewTarget } from "./lib/git.mjs";
+import { MIN_RECOMMENDED_AGY, isVersionOk } from "./lib/capabilities.mjs";
 import {
   createJob,
   writeJob,
@@ -65,11 +66,14 @@ function cmdSetup(parsed) {
   const configDir = agyConfigDir();
   const configExists = existsSync(configDir);
   const installationId = existsSync(join(configDir, "installation_id"));
+  // agy 1.1 stores conversations as `<uuid>.db`; 1.0 used `.pb`. Accept both —
+  // an old thread is still evidence of a completed sign-in.
   const hasConversations =
     existsSync(join(configDir, "conversations")) &&
-    safeReaddir(join(configDir, "conversations")).some((f) => f.endsWith(".pb"));
+    safeReaddir(join(configDir, "conversations")).some((f) => f.endsWith(".db") || f.endsWith(".pb"));
 
   const version = bin ? agyVersion(bin.path) : null;
+  const versionOk = bin ? isVersionOk(version) : null;
   // Best-effort auth signal: we never log you in. Presence of prior threads or an
   // installation id strongly suggests a completed sign-in.
   const authedGuess = configExists && (installationId || hasConversations);
@@ -97,6 +101,12 @@ function cmdSetup(parsed) {
     report.nextSteps.push("You're set. Try `/antigravity:review` or `/antigravity:delegate <task>`.");
   }
 
+  if (versionOk === false) {
+    report.nextSteps.push(
+      `Your \`agy\` is ${version}; ${MIN_RECOMMENDED_AGY}+ is recommended for accurate failure reporting. Update with \`agy update\`.`,
+    );
+  }
+
   if (hasFlag(parsed, "json")) {
     out(
       JSON.stringify(
@@ -105,6 +115,7 @@ function cmdSetup(parsed) {
           installed: report.binary.found,
           binaryPath: bin?.path ?? null,
           version,
+          versionOk,
           authedGuess,
           configDir,
         },

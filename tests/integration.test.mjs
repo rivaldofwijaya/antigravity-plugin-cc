@@ -1,7 +1,7 @@
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, chmodSync, writeFileSync, readdirSync, readFileSync, existsSync } from "node:fs";
+import { mkdtempSync, chmodSync, writeFileSync, readdirSync, readFileSync, existsSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -379,4 +379,71 @@ test("a successful background job still reconciles to done and relays the respon
   });
   assert.match(result, /Antigravity \(fake\) reply/);
   assert.match(result, /UNTRUSTED DATA/);
+});
+
+// T-C3
+test("setup --json reports versionOk true for the fake binary's 9.9.9", () => {
+  const { stdout } = run(["setup", "--json"]);
+  const data = JSON.parse(stdout);
+  assert.equal(data.version, "9.9.9-fake");
+  assert.equal(data.versionOk, true);
+});
+
+test("setup warns below the floor and stays ready", () => {
+  const home = mkdtempSync(join(tmpdir(), "agy-home-"));
+  const cwd = mkdtempSync(join(tmpdir(), "agy-cwd-"));
+  const oldAgy = join(mkdtempSync(join(tmpdir(), "old-agy-")), "agy.mjs");
+  writeFileSync(oldAgy, "#!/usr/bin/env node\nprocess.stdout.write('1.0.3\\n');\n");
+  chmodSync(oldAgy, 0o755);
+  const env = { ...process.env, ANTIGRAVITY_CC_AGY_BIN: oldAgy, ANTIGRAVITY_CC_HOME: home };
+
+  const json = JSON.parse(
+    execFileSync("node", [COMPANION, "setup", "--json"], { cwd, env, encoding: "utf8" }),
+  );
+  assert.equal(json.versionOk, false);
+  assert.equal(json.ready, true, "the advisory must not block");
+
+  const human = execFileSync("node", [COMPANION, "setup"], { cwd, env, encoding: "utf8" });
+  assert.match(human, /1\.1\.20\+ is recommended/);
+  assert.match(human, /agy update/);
+});
+
+test("setup does not nag when the version is unparseable", () => {
+  const home = mkdtempSync(join(tmpdir(), "agy-home-"));
+  const cwd = mkdtempSync(join(tmpdir(), "agy-cwd-"));
+  const oddAgy = join(mkdtempSync(join(tmpdir(), "odd-agy-")), "agy.mjs");
+  writeFileSync(oddAgy, "#!/usr/bin/env node\nprocess.stdout.write('built from source\\n');\n");
+  chmodSync(oddAgy, 0o755);
+  const env = { ...process.env, ANTIGRAVITY_CC_AGY_BIN: oddAgy, ANTIGRAVITY_CC_HOME: home };
+
+  const json = JSON.parse(
+    execFileSync("node", [COMPANION, "setup", "--json"], { cwd, env, encoding: "utf8" }),
+  );
+  assert.equal(json.versionOk, null);
+
+  const human = execFileSync("node", [COMPANION, "setup"], { cwd, env, encoding: "utf8" });
+  assert.doesNotMatch(human, /is recommended/);
+});
+
+// T-S1 — the B3 regression test.
+test("setup's auth heuristic accepts a .db conversation file", () => {
+  const fakeHome = mkdtempSync(join(tmpdir(), "agy-gemini-home-"));
+  const convDir = join(fakeHome, ".gemini", "antigravity-cli", "conversations");
+  mkdirSync(convDir, { recursive: true });
+  writeFileSync(join(convDir, "abcd1234-ef56-7890-abcd-1234567890ef.db"), "");
+
+  const json = JSON.parse(
+    execFileSync("node", [COMPANION, "setup", "--json"], {
+      cwd: mkdtempSync(join(tmpdir(), "agy-cwd-")),
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        ANTIGRAVITY_CC_AGY_BIN: FAKE_AGY,
+        ANTIGRAVITY_CC_HOME: mkdtempSync(join(tmpdir(), "agy-home-")),
+        HOME: fakeHome,
+        USERPROFILE: fakeHome,
+      },
+    }),
+  );
+  assert.equal(json.authedGuess, true, "agy 1.1 stores conversations as .db, not .pb");
 });
