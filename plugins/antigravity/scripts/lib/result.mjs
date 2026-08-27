@@ -26,6 +26,53 @@ function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+// agy assigns conversation ids as UUIDs. Validating the shape before it is
+// ever rendered means a value that reached here through a corrupted or
+// downgraded run cannot smuggle arbitrary text into the "reopen in the TUI"
+// footer line, which sits OUTSIDE the untrusted-output fence.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function normaliseConversationId(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return UUID_RE.test(trimmed) ? trimmed : null;
+}
+
+// A stderr line that means the invocation itself never produced a real
+// response — not a normal program's own error output. Modelled directly on
+// FLAG_REJECTION_RE in agy.mjs: we do not trust the exit code (agy exits 0 on
+// its own failures and a foreign nonzero exit is equally unreliable in the
+// other direction), only an unambiguous, narrow stderr pattern.
+const INVOCATION_FAILURE_RE =
+  /flag provided but not defined|not defined: --|unknown flag|invalid flag|panic:|no such file or directory|permission denied|command not found/i;
+
+/**
+ * Recognise a process-level invocation failure from stderr / a spawn error.
+ * Returns null when nothing recognisable is present — the caller must then
+ * trust whatever stdout/the log already said, exit code included.
+ *
+ * @param {{stderr?: string, code?: number|null, spawnError?: string}} input
+ * @returns {{kind:"backend", message:string, resetsIn:null}|null}
+ */
+function classifyProcessFailure({ stderr, code, spawnError }) {
+  if (spawnError) {
+    return {
+      kind: "backend",
+      message: `Antigravity could not be started: ${spawnError}`,
+      resetsIn: null,
+    };
+  }
+  const text = typeof stderr === "string" ? stderr.trim() : "";
+  if (!text || !INVOCATION_FAILURE_RE.test(text)) return null;
+  // A background job has no captured exit code (the process is detached), so
+  // `code` is undefined there and this check is skipped. When we DO have one
+  // and it is exactly 0, a clean exit alongside stray stderr noise that merely
+  // resembles the pattern is not treated as a failure.
+  if (typeof code === "number" && code === 0) return null;
+  const firstLine = text.split(/\r?\n/).find((l) => l.trim()) || text;
+  return { kind: "backend", message: firstLine.trim(), resetsIn: null };
+}
+
 /**
  * Parse agy's JSON result off stdout. Two-stage: the whole stream first, then
  * the last line that looks like an object — agy can interleave log noise on the
@@ -87,7 +134,7 @@ function normaliseUsage(usage) {
  */
 export function fromJson(json) {
   const base = {
-    conversationId: json.conversation_id ? String(json.conversation_id) : null,
+    conversationId: normaliseConversationId(json.conversation_id),
     usage: normaliseUsage(json.usage),
     durationSeconds: num(json.duration_seconds),
     numTurns: num(json.num_turns),
@@ -142,10 +189,26 @@ export function fromLegacy({ stdout, logText }) {
  *   2. parseable JSON with a string `status` → the JSON path;
  *   3. otherwise → the legacy text + log path.
  *
- * @param {{stdout: string, logText: string, timedOut?: boolean, printTimeout?: string}} input
+ * `downgraded` (set by `runForeground` when a flag-rejection retry actually
+ * happened) forces step 3 even when stdout happens to parse as JSON: after a
+ * confirmed downgrade, `--output-format json` was NOT on the argv that
+ * produced this stdout, so stdout is the model's own untrusted response text,
+ * not agy's transport envelope. Treating a forged `{"status":"ERROR",...}`
+ * blob written by that model as the envelope would let its `error`/
+ * `conversation_id` fields escape the untrusted-output fence — see render.mjs.
+ *
+ * `stderr` / `code` / `spawnError` are one additional signal, not a verdict:
+ * they can only turn a legacy "success" (any non-empty stdout) or "empty"
+ * (no stdout) outcome into "failed" when the process reported an
+ * UNAMBIGUOUS invocation failure (see `classifyProcessFailure`). A bare
+ * nonzero exit code next to a real response is never enough on its own — agy
+ * itself is not reliable there, and neither is any other binary in general.
+ *
+ * @param {{stdout: string, logText: string, timedOut?: boolean, printTimeout?: string,
+ *           downgraded?: boolean, stderr?: string, code?: number|null, spawnError?: string}} input
  * @returns {RunResult}
  */
-export function classifyRun({ stdout, logText, timedOut, printTimeout }) {
+export function classifyRun({ stdout, logText, timedOut, printTimeout, downgraded, stderr, code, spawnError }) {
   if (timedOut) {
     return {
       outcome: "failed",
@@ -163,7 +226,18 @@ export function classifyRun({ stdout, logText, timedOut, printTimeout }) {
     };
   }
 
-  const json = parseAgyJson(stdout);
-  if (json && typeof json.status === "string") return fromJson(json);
-  return fromLegacy({ stdout, logText });
+  const processFailure = classifyProcessFailure({ stderr, code, spawnError });
+
+  const json = downgraded ? null : parseAgyJson(stdout);
+  if (json && typeof json.status === "string") {
+    // The JSON envelope is agy's own structured report of what happened; it is
+    // authoritative and is not second-guessed by exit-code/stderr noise.
+    return fromJson(json);
+  }
+
+  const legacy = fromLegacy({ stdout, logText });
+  if (processFailure && legacy.outcome !== "failed") {
+    return { ...legacy, outcome: "failed", responseText: "", error: processFailure };
+  }
+  return legacy;
 }

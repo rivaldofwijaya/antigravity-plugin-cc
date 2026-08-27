@@ -220,6 +220,10 @@ function runAgyTask(parsed, { kind, title, prompt, readOnly, resume }) {
     logText: result.logText,
     timedOut: result.timedOut,
     printTimeout,
+    downgraded: result.downgraded,
+    stderr: result.stderr,
+    code: result.code,
+    spawnError: result.error,
   });
 
   job.conversationId = run.conversationId || job.conversationId;
@@ -347,6 +351,7 @@ function cmdResult(parsed) {
     stdout: readLogSafe(job.paths.output),
     logText: readLogSafe(job.paths.log),
     timedOut: false,
+    stderr: readLogSafe(job.paths.err),
   });
   const meta = {
     title: job.title,

@@ -200,6 +200,21 @@ test("--model reaches agy's argv and produces no warning", () => {
   assert.doesNotMatch(res.stdout, /refactor the parser.*--model/s, "the flag must not leak into the prompt");
 });
 
+// Finding 4, end to end. Acceptance criterion 5: "/antigravity:delegate --model
+// no-such-model <task> surfaces agy's own model-list error to the user rather
+// than an empty result." Found by live verification against the real CLI, not
+// by the diff — the fake here reproduces agy's actual multi-line JSON error.
+test("--model no-such-model surfaces agy's real (multi-line) error, not the last line of the model list", () => {
+  const { stdout } = run(["delegate", "--model", "no-such-model", "say OK"], { mode: "json-model-error" });
+  assert.match(stdout, /backend error/i);
+  assert.match(
+    stdout,
+    /invalid model selection \(--model "no-such-model" --effort ""\): model no-such-model is/,
+    "the actual error must be surfaced, not discarded",
+  );
+  assert.match(stdout, /GPT-OSS 120B \(Medium\)/, "the model list is useful context and must survive too");
+});
+
 // T-A5
 test("--plan produces both --mode plan and --sandbox", () => {
   const argv = argvSentFor(["delegate", "--plan", "add caching"]);
@@ -265,6 +280,49 @@ test("a pre-1.1 agy that rejects the probe flags still returns the response", ()
   assert.match(res.stdout, /Antigravity \(fake\) reply/);
   assert.match(res.stderr, /retrying without them/i, "the downgrade note belongs on stderr");
   assert.doesNotMatch(res.stdout, /retrying without them/i, "stdout is relayed verbatim; keep it clean");
+});
+
+// Finding 2, end to end: a foreground run that produced SOME stdout before a
+// recognizable invocation failure must not be relayed to the user as if it
+// were the real response.
+test("a foreground flag-rejection with partial stdout is reported as an error, not a success", () => {
+  const home = mkdtempSync(join(tmpdir(), "agy-home-"));
+  const cwd = mkdtempSync(join(tmpdir(), "agy-cwd-"));
+  const res = spawnSync("node", [COMPANION, "delegate", "summarize the repo"], {
+    cwd,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      ANTIGRAVITY_CC_AGY_BIN: FAKE_AGY,
+      ANTIGRAVITY_CC_HOME: home,
+      FAKE_AGY_MODE: "flag-error-stdout",
+    },
+  });
+  assert.doesNotMatch(res.stdout, /partial output before flag rejection/, "partial garbage must not read as a real answer");
+  assert.match(res.stdout, /backend error/i);
+  assert.match(res.stdout, /flag provided but not defined/i);
+});
+
+// Finding 2, end to end: a binary broken enough to fail even the post-
+// downgrade retry, with empty stdout both times, must report an error — not
+// the "no output at all" empty-result message, which would tell the user
+// nothing failed.
+test("a foreground binary that fails even after the downgrade retry is reported as an error, not empty", () => {
+  const home = mkdtempSync(join(tmpdir(), "agy-home-"));
+  const cwd = mkdtempSync(join(tmpdir(), "agy-cwd-"));
+  const res = spawnSync("node", [COMPANION, "delegate", "summarize the repo"], {
+    cwd,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      ANTIGRAVITY_CC_AGY_BIN: FAKE_AGY,
+      ANTIGRAVITY_CC_HOME: home,
+      FAKE_AGY_MODE: "broken-binary",
+    },
+  });
+  assert.match(res.stdout, /backend error/i);
+  assert.match(res.stdout, /permission denied/i);
+  assert.doesNotMatch(res.stdout, /finished without producing any output/i);
 });
 
 // T-L4 — the §4.6 false-positive guard.
@@ -381,6 +439,27 @@ test("a successful background job still reconciles to done and relays the respon
   assert.match(result, /UNTRUSTED DATA/);
 });
 
+// Finding 2 — a pre-1.1 binary rejecting the default probe flags must
+// reconcile to "failed", not silently to "empty". A background job cannot
+// retry (the process is detached and unwatched), so this is the one place
+// reconcile()'s reading of err.txt is what makes the distinction possible at
+// all — previously reconcile() never read err.txt.
+test("a background job whose agy rejects the probe flags reconciles to failed, not empty", () => {
+  const { job, id, cwd, env } = startBackground("legacy-flag-error");
+  assert.equal(job.status, "failed", "an invocation error must not reconcile to a silent empty result");
+  assert.match(job.error, /flag provided but not defined/i);
+
+  const result = execFileSync("node", [COMPANION, "result", id], {
+    cwd,
+    env,
+    encoding: "utf8",
+    timeout: BACKGROUND_COMMAND_TIMEOUT_MS,
+  });
+  assert.match(result, /backend error/i);
+  assert.match(result, /flag provided but not defined/i);
+  assert.doesNotMatch(result, /finished without producing any output/i);
+});
+
 // T-C3
 test("setup --json reports versionOk true for the fake binary's 9.9.9", () => {
   const { stdout } = run(["setup", "--json"]);
@@ -446,4 +525,85 @@ test("setup's auth heuristic accepts a .db conversation file", () => {
     }),
   );
   assert.equal(json.authedGuess, true, "agy 1.1 stores conversations as .db, not .pb");
+});
+
+// --- Finding 1: user-controlled job ids must never escape the job store ----
+// The command layer only filters on `p.startsWith("agy-")`, so a crafted id
+// like `agy-x-x/../../planted` used to reach `readJob()` unvalidated and
+// resolve outside jobsRoot(). Command-level tests: nothing outside the store
+// is read (status/result) or written (cancel).
+
+function plantJobOutsideStore(home, { pid = null, status = "running" } = {}) {
+  // jobDir(id) = join(jobsRoot, id) = join(home/jobs, id). An id shaped like
+  // "agy-x-x/../../planted" walks back out of "jobs" into "home/planted" —
+  // one level outside the store, exactly the escape in the finding.
+  const plantedDir = join(home, "planted");
+  mkdirSync(plantedDir, { recursive: true });
+  const record = {
+    id: "planted",
+    kind: "delegate",
+    title: "PLANTED-SECRET-DO-NOT-LEAK",
+    status,
+    pid,
+    conversationId: null,
+    startedAt: new Date().toISOString(),
+    finishedAt: null,
+    error: null,
+  };
+  const metaPath = join(plantedDir, "meta.json");
+  writeFileSync(metaPath, JSON.stringify(record, null, 2));
+  return { plantedDir, metaPath, before: readFileSync(metaPath, "utf8") };
+}
+
+test("status refuses to read a job id that escapes the job store", () => {
+  const home = mkdtempSync(join(tmpdir(), "agy-home-"));
+  const cwd = mkdtempSync(join(tmpdir(), "agy-cwd-"));
+  const { metaPath, before } = plantJobOutsideStore(home, { status: "done" });
+  const maliciousId = "agy-x-x/../../planted";
+
+  const stdout = execFileSync("node", [COMPANION, "status", maliciousId], {
+    cwd,
+    encoding: "utf8",
+    env: { ...process.env, ANTIGRAVITY_CC_HOME: home, ANTIGRAVITY_CC_AGY_BIN: FAKE_AGY },
+  });
+
+  assert.doesNotMatch(stdout, /PLANTED-SECRET/, "the planted job outside the store must never be rendered");
+  assert.match(stdout, /No job/i);
+  assert.equal(readFileSync(metaPath, "utf8"), before, "the planted file must be untouched");
+});
+
+test("result refuses to read a job id that escapes the job store", () => {
+  const home = mkdtempSync(join(tmpdir(), "agy-home-"));
+  const cwd = mkdtempSync(join(tmpdir(), "agy-cwd-"));
+  const { metaPath, before } = plantJobOutsideStore(home, { status: "done" });
+  const maliciousId = "agy-x-x/../../planted";
+
+  const stdout = execFileSync("node", [COMPANION, "result", maliciousId], {
+    cwd,
+    encoding: "utf8",
+    env: { ...process.env, ANTIGRAVITY_CC_HOME: home, ANTIGRAVITY_CC_AGY_BIN: FAKE_AGY },
+  });
+
+  assert.doesNotMatch(stdout, /PLANTED-SECRET/, "the planted job outside the store must never be rendered");
+  assert.match(stdout, /No/i);
+  assert.equal(readFileSync(metaPath, "utf8"), before, "the planted file must be untouched");
+});
+
+test("cancel refuses to act on a job id that escapes the job store", () => {
+  const home = mkdtempSync(join(tmpdir(), "agy-home-"));
+  const cwd = mkdtempSync(join(tmpdir(), "agy-cwd-"));
+  // A "running" job with a syntactically valid but non-existent pid: if the
+  // traversal were not blocked, cancel() would happily rewrite this file's
+  // status to "cancelled" and attempt to signal that pid.
+  const { metaPath, before } = plantJobOutsideStore(home, { status: "running", pid: 999_999_999 });
+  const maliciousId = "agy-x-x/../../planted";
+
+  const stdout = execFileSync("node", [COMPANION, "cancel", maliciousId], {
+    cwd,
+    encoding: "utf8",
+    env: { ...process.env, ANTIGRAVITY_CC_HOME: home, ANTIGRAVITY_CC_AGY_BIN: FAKE_AGY },
+  });
+
+  assert.match(stdout, /No running job/i);
+  assert.equal(readFileSync(metaPath, "utf8"), before, "cancel must not write to a job outside the store");
 });

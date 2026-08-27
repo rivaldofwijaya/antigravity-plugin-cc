@@ -107,13 +107,25 @@ export function classifyErrorText(text) {
     };
   }
 
-  // Generic backend failure: surface the most informative line.
+  // Generic backend failure. Two different shapes reach this branch:
+  //  - a LOG-sourced line set, already reduced by dedupe() to the single most
+  //    informative wrapped/bare duplicate (typically one line) — picking that
+  //    one line by content ("agent executor error"/"code NNN") is still right;
+  //  - agy's own multi-line JSON `error` string (e.g. an invalid --model
+  //    error), which was never deduped and is not a set of duplicate log
+  //    lines at all: its FIRST line is the actual error and every line after
+  //    it is useful context (agy's own model list), not noise to discard.
+  // So: prefer a line matching the specific patterns (covers the LOG case and
+  // any JSON error that happens to contain one); otherwise keep every line,
+  // in order, rather than picking only the last one.
   const lines = joined.split(/\r?\n/).filter(Boolean);
-  const informative =
-    lines.find((l) => /agent executor error|code \d{3}/i.test(l)) || lines[lines.length - 1];
+  const informative = lines.find((l) => /agent executor error|code \d{3}/i.test(l));
+  const message = informative
+    ? stripGlogPrefix(informative)
+    : lines.map(stripGlogPrefix).join("\n");
   return {
     kind: "backend",
-    message: stripGlogPrefix(informative),
+    message,
     resetsIn: null,
   };
 }

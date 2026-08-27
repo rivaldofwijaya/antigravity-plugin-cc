@@ -113,3 +113,42 @@ test("classifyErrorText classifies a bare JSON error string", () => {
   assert.equal(classifyErrorText(""), null);
   assert.equal(classifyErrorText(null), null);
 });
+
+// Finding 4 — a multi-line backend error's real message (the FIRST line) must
+// survive, not just whatever happens to be the LAST line. Verified live
+// against `agy 1.1.21`:
+// `node antigravity.mjs delegate --model no-such-model "say OK"`.
+const REAL_MODEL_SELECTION_ERROR =
+  'invalid model selection (--model "no-such-model" --effort ""): model no-such-model is\n' +
+  "not recognized as a known model or custom model in settings\n" +
+  "Available models:\n" +
+  "  Gemini 3.7 Flash (High)\n" +
+  "  Gemini 3.7 Flash (Medium)\n" +
+  "  Gemini 3.6 Flash (High)\n" +
+  "  Claude Sonnet 4.6\n" +
+  "  Claude Opus 4.6 (Thinking)\n" +
+  "  GPT-OSS 120B (Medium)";
+
+test("classifyErrorText surfaces the real message of a multi-line backend error, not just the last line", () => {
+  const r = classifyErrorText(REAL_MODEL_SELECTION_ERROR);
+  assert.equal(r.kind, "backend");
+  assert.match(
+    r.message,
+    /^invalid model selection \(--model "no-such-model" --effort ""\): model no-such-model is/,
+    "the actual error must lead the message, not the last model in the list",
+  );
+  assert.match(r.message, /not recognized as a known model/);
+  // The dispatch requires the useful context (the model list) to survive too,
+  // not just the first line in isolation.
+  assert.match(r.message, /GPT-OSS 120B \(Medium\)/, "the model list is useful context and must not be discarded");
+});
+
+test("classifyErrorText still picks the 'agent executor error' line over a bare duplicate", () => {
+  // Regression guard for the LOG path: two lines, as classifyError(errorLines)
+  // would join them after dedupe(). The picked line must still be the one
+  // carrying "agent executor error", not merely the last line.
+  const twoLines = "agent executor error: INTERNAL (code 500): boom\nINTERNAL (code 500): boom";
+  const r = classifyErrorText(twoLines);
+  assert.equal(r.kind, "backend");
+  assert.match(r.message, /^agent executor error: INTERNAL \(code 500\): boom$/);
+});

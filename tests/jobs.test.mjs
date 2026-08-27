@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createJob, pruneJobs } from "../plugins/antigravity/scripts/lib/jobs.mjs";
+import { createJob, pruneJobs, jobPaths, readJob } from "../plugins/antigravity/scripts/lib/jobs.mjs";
 
 function envWithHome() {
   return { ...process.env, ANTIGRAVITY_CC_HOME: mkdtempSync(join(tmpdir(), "agy-jobs-")) };
@@ -107,6 +107,43 @@ test("createJob keeps a backdated terminal job it just created under a zero cap"
   );
 
   assert.ok(existsSync(fresh.paths.dir), "the job just created must survive regardless of metadata");
+});
+
+// Finding 1 — user-controlled job ids must never escape the job store.
+test("jobPaths rejects a traversal-shaped id before constructing any path", () => {
+  const env = envWithHome();
+  assert.throws(() => jobPaths("agy-x-x/../../../../../tmp/evil", env), /invalid job id/);
+});
+
+test("jobPaths rejects ids with no resemblance to a real job id", () => {
+  const env = envWithHome();
+  for (const bad of ["../../etc/passwd", "agy-", "not-a-job", "", "agy-a-b/c", "agy-a-b\0"]) {
+    assert.throws(() => jobPaths(bad, env), `expected jobPaths(${JSON.stringify(bad)}) to throw`);
+  }
+});
+
+test("readJob returns null — not a planted file outside the store — for a traversal id", () => {
+  const env = envWithHome();
+  const jobsDir = join(env.ANTIGRAVITY_CC_HOME, "jobs");
+  mkdirSync(jobsDir, { recursive: true });
+
+  // Plant a "job" one level above jobsRoot(), reachable only by a traversal id.
+  const plantedDir = join(env.ANTIGRAVITY_CC_HOME, "planted");
+  mkdirSync(plantedDir, { recursive: true });
+  writeFileSync(
+    join(plantedDir, "meta.json"),
+    JSON.stringify({ id: "planted", status: "done", title: "PLANTED-SECRET", startedAt: new Date().toISOString() }),
+  );
+
+  // jobDir(id) = join(jobsRoot, id); this id walks back out of "jobs" and into
+  // "planted" — exactly the shape in the finding's own reproduction.
+  const maliciousId = "agy-x-x/../../planted";
+  assert.equal(readJob(maliciousId, env), null, "must not read the planted meta.json");
+});
+
+test("createJob validates a caller-supplied id the same way", () => {
+  const env = envWithHome();
+  assert.throws(() => createJob({ kind: "delegate", title: "t", prompt: "p", id: "../escape" }, env));
 });
 
 test("createJob still returns its record when pruning throws", () => {

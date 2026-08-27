@@ -16,6 +16,11 @@
 //                         behaves as `success` once the flag is gone
 //   noisy-log-success  -> text success PLUS 1.1 startup auth noise in the log
 //   wrapped-quota      -> empty stdout, 1.1 wrapper-prefixed quota line in the log
+//   broken-binary      -> rejects --output-format like legacy-flag-error, but ALSO
+//                         rejects the post-downgrade retry (empty stdout, exit 126,
+//                         "permission denied" on stderr both times)
+//   json-model-error   -> {"status":"ERROR", error: agy's REAL multi-line
+//                         model-selection error, verified live on 1.1.21}, exit 0
 //
 // The JSON modes emit JSON only when `--output-format json` is on the argv, so a
 // single mode exercises both the JSON and the legacy text path.
@@ -112,6 +117,18 @@ if (mode === "flag-error-stdout" && wantsJson) {
 
 if (mode === "flag-error-stdout") succeed();
 
+// A binary broken enough that even the post-downgrade retry fails, with empty
+// stdout both times — exercises the foreground "empty stdout, but the process
+// reported a recognizable invocation failure" shape end-to-end (Finding 2).
+if (mode === "broken-binary" && wantsJson) {
+  process.stderr.write("flag provided but not defined: -output-format\n");
+  process.exit(2);
+}
+if (mode === "broken-binary") {
+  process.stderr.write("permission denied\n");
+  process.exit(126);
+}
+
 if (mode === "quota") {
   writeLog(
     baseLog +
@@ -182,6 +199,31 @@ if (mode === "json-empty") {
       response: "",
       duration_seconds: 1.5,
       num_turns: 1,
+      usage: usage(0),
+    });
+  }
+  process.exit(0);
+}
+
+if (mode === "json-model-error") {
+  writeLog(baseLog);
+  if (wantsJson) {
+    emitJson({
+      conversation_id: "",
+      status: "ERROR",
+      response: "",
+      error:
+        'invalid model selection (--model "no-such-model" --effort ""): model no-such-model is\n' +
+        "not recognized as a known model or custom model in settings\n" +
+        "Available models:\n" +
+        "  Gemini 3.7 Flash (High)\n" +
+        "  Gemini 3.7 Flash (Medium)\n" +
+        "  Gemini 3.6 Flash (High)\n" +
+        "  Claude Sonnet 4.6\n" +
+        "  Claude Opus 4.6 (Thinking)\n" +
+        "  GPT-OSS 120B (Medium)",
+      duration_seconds: 0,
+      num_turns: 0,
       usage: usage(0),
     });
   }
