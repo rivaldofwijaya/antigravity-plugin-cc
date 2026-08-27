@@ -293,3 +293,65 @@ test("a successful JSON run reports usage below the fence", () => {
   const { stdout } = run(["delegate", "summarize the repo"], { mode: "success" });
   assert.match(stdout, /Antigravity: [\d,]+ tokens · 1 turn/);
 });
+
+// Background jobs are detached; poll the job record until it leaves "running".
+function waitForJob(home, cwd, timeoutMs = 20_000) {
+  const deadline = Date.now() + timeoutMs;
+  const env = { ...process.env, ANTIGRAVITY_CC_HOME: home, ANTIGRAVITY_CC_AGY_BIN: FAKE_AGY };
+  for (;;) {
+    const jobsDir = join(home, "jobs");
+    const ids = readdirSync(jobsDir);
+    assert.equal(ids.length, 1, "expected exactly one job record");
+    // `status` reconciles as a side effect.
+    execFileSync("node", [COMPANION, "status", ids[0]], { cwd, env, encoding: "utf8" });
+    const job = JSON.parse(readFileSync(join(jobsDir, ids[0], "meta.json"), "utf8"));
+    if (job.status !== "running") return { id: ids[0], job, env };
+    if (Date.now() > deadline) throw new Error(`job stayed running: ${JSON.stringify(job)}`);
+  }
+}
+
+function startBackground(mode) {
+  const home = mkdtempSync(join(tmpdir(), "agy-home-"));
+  const cwd = mkdtempSync(join(tmpdir(), "agy-cwd-"));
+  execFileSync("node", [COMPANION, "delegate", "--background", "do a thing"], {
+    cwd,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      ANTIGRAVITY_CC_AGY_BIN: FAKE_AGY,
+      ANTIGRAVITY_CC_HOME: home,
+      FAKE_AGY_MODE: mode,
+    },
+  });
+  return { home, cwd, ...waitForJob(home, cwd) };
+}
+
+// T-J1 — the §4.7 regression test.
+test("a failed background job reconciles to failed despite non-empty JSON output", () => {
+  const { job, id, cwd, env } = startBackground("json-error");
+  assert.equal(job.status, "failed", "a JSON ERROR blob is output, but it is not a success");
+  assert.match(job.error, /quota/i);
+
+  const result = execFileSync("node", [COMPANION, "result", id], { cwd, env, encoding: "utf8" });
+  assert.match(result, /quota is exhausted/i);
+  assert.match(result, /152h59m39s/);
+});
+
+// T-J2
+test("an empty background job reconciles to empty and says so", () => {
+  const { job, id, cwd, env } = startBackground("json-empty");
+  assert.equal(job.status, "empty");
+
+  const result = execFileSync("node", [COMPANION, "result", id], { cwd, env, encoding: "utf8" });
+  assert.match(result, /finished without producing any output/i);
+  assert.doesNotMatch(result, /UNTRUSTED DATA/, "there is no model output to fence");
+});
+
+test("a successful background job still reconciles to done and relays the response", () => {
+  const { job, id, cwd, env } = startBackground("success");
+  assert.equal(job.status, "done");
+
+  const result = execFileSync("node", [COMPANION, "result", id], { cwd, env, encoding: "utf8" });
+  assert.match(result, /Antigravity \(fake\) reply/);
+  assert.match(result, /UNTRUSTED DATA/);
+});

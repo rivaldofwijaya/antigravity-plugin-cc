@@ -12,7 +12,7 @@ import {
 import { join } from "node:path";
 import { jobsRoot, jobDir } from "./paths.mjs";
 import { readLogSafe } from "./agy.mjs";
-import { scanAgyLog } from "./logscan.mjs";
+import { classifyRun } from "./result.mjs";
 
 function nowIso() {
   return new Date().toISOString();
@@ -85,29 +85,41 @@ export function isAlive(pid) {
 }
 
 /**
- * Reconcile a job's recorded status with reality: if it was "running" but the pid
- * is gone, read output + log, classify, and persist a terminal status.
+ * Terminal job status for a RunResult outcome. The single mapping — the
+ * foreground path and reconcile() must never disagree about what happened.
+ */
+export function statusForOutcome(outcome) {
+  if (outcome === "success") return "done";
+  if (outcome === "empty") return "empty";
+  return "failed";
+}
+
+/**
+ * Reconcile a job's recorded status with reality: if it was "running" but the
+ * pid is gone, classify what the run actually produced and persist a terminal
+ * status.
+ *
+ * Note what this does NOT do: test output.txt for emptiness. Under
+ * `--output-format json` a FAILED run writes a perfectly non-empty JSON blob,
+ * so emptiness says nothing about success. Only classifyRun decides.
  */
 export function reconcile(job) {
   if (!job) return job;
   if (job.status !== "running") return job;
   if (isAlive(job.pid)) return job;
 
-  const output = readLogSafe(job.paths.output).trim();
-  const logText = readLogSafe(job.paths.log);
-  const scan = scanAgyLog(logText);
+  const run = classifyRun({
+    stdout: readLogSafe(job.paths.output),
+    logText: readLogSafe(job.paths.log),
+    timedOut: false,
+  });
 
   job.finishedAt = nowIso();
-  job.conversationId = job.conversationId || scan.conversationId;
-  if (output) {
-    job.status = "done";
-  } else if (scan.error) {
-    job.status = "failed";
-    job.error = scan.error.message + (scan.error.resetsIn ? ` (resets in ${scan.error.resetsIn})` : "");
-  } else {
-    // No output, no detected error: treat as done-but-empty.
-    job.status = "done";
-  }
+  job.conversationId = job.conversationId || run.conversationId;
+  job.status = statusForOutcome(run.outcome);
+  job.error = run.error
+    ? run.error.message + (run.error.resetsIn ? ` (resets in ${run.error.resetsIn})` : "")
+    : null;
   return writeJob(job);
 }
 

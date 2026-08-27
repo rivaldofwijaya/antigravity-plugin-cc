@@ -22,7 +22,6 @@ import {
   agyVersion,
   readLogSafe,
 } from "./lib/agy.mjs";
-import { scanAgyLog } from "./lib/logscan.mjs";
 import { classifyRun } from "./lib/result.mjs";
 import { resolveReviewTarget } from "./lib/git.mjs";
 import {
@@ -33,6 +32,7 @@ import {
   listJobs,
   latestJob,
   cancelJob,
+  statusForOutcome,
 } from "./lib/jobs.mjs";
 import * as render from "./lib/render.mjs";
 
@@ -332,13 +332,33 @@ function cmdResult(parsed) {
     return;
   }
 
-  const output = readLogSafe(job.paths.output).trim();
-  const scan = scanAgyLog(readLogSafe(job.paths.log));
-  const conversationId = job.conversationId || scan.conversationId;
-  if (output) {
-    out(render.renderResponse(output, { title: job.title, conversationId }));
+  const run = classifyRun({
+    stdout: readLogSafe(job.paths.output),
+    logText: readLogSafe(job.paths.log),
+    timedOut: false,
+  });
+  const meta = {
+    title: job.title,
+    conversationId: job.conversationId || run.conversationId,
+    logFile: job.paths.log,
+    jobId: job.id,
+  };
+
+  if (job.status === "cancelled") {
+    out(render.renderJobStatus(job));
+  } else if (run.outcome === "success") {
+    out(
+      render.renderResponse(run.responseText, {
+        ...meta,
+        usage: run.usage,
+        durationSeconds: run.durationSeconds,
+        numTurns: run.numTurns,
+      }),
+    );
+  } else if (run.outcome === "empty") {
+    out(render.renderEmpty(meta));
   } else {
-    out(render.renderError(scan.error, { title: job.title, conversationId, logFile: job.paths.log }));
+    out(render.renderError(run.error, meta));
   }
 }
 
@@ -401,12 +421,6 @@ function main() {
     default:
       return usage();
   }
-}
-
-function statusForOutcome(outcome) {
-  if (outcome === "success") return "done";
-  if (outcome === "empty") return "empty";
-  return "failed";
 }
 
 main();

@@ -233,6 +233,7 @@ export function renderJobStatus(job) {
     `Started: ${job.startedAt}`,
     job.finishedAt ? `Finished: ${job.finishedAt}` : "",
     job.error ? `Error: ${job.error}` : "",
+    job.status === "empty" ? "The run completed but returned no output." : "",
   ].filter(Boolean);
   if (job.status === "running") {
     lines.push("", `Get the result when done: \`/antigravity:result ${job.id}\``);
