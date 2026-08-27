@@ -46,16 +46,30 @@ test("pruneJobs deletes past the TTL and beyond the cap, but keeps running jobs"
   }
 });
 
+test("pruneJobs keeps a terminal job whose pid is alive past its TTL", () => {
+  const env = { ...envWithHome(), ANTIGRAVITY_CC_JOB_TTL_DAYS: "14", ANTIGRAVITY_CC_MAX_JOBS: "10" };
+  const dir = seedJob(env, "agy-live-000001", { status: "done", ageDays: 40, pid: process.pid });
+
+  pruneJobs(env);
+
+  assert.ok(existsSync(dir), "a terminal job with a live pid must survive its own TTL");
+});
+
 // T-J4
 test("pruneJobs never deletes a directory whose name is not a job id", () => {
   const env = { ...envWithHome(), ANTIGRAVITY_CC_MAX_JOBS: "0", ANTIGRAVITY_CC_JOB_TTL_DAYS: "0" };
   mkdirSync(join(env.ANTIGRAVITY_CC_HOME, "jobs"), { recursive: true });
   mkdirSync(join(env.ANTIGRAVITY_CC_HOME, "jobs", "not-a-job"), { recursive: true });
+  mkdirSync(join(env.ANTIGRAVITY_CC_HOME, "jobs", "agy-..-escape"), { recursive: true });
   seedJob(env, "agy-bbb-000001", { ageDays: 99 });
 
   pruneJobs(env);
 
   assert.ok(existsSync(join(env.ANTIGRAVITY_CC_HOME, "jobs", "not-a-job")), "unknown dirs are left alone");
+  assert.ok(
+    existsSync(join(env.ANTIGRAVITY_CC_HOME, "jobs", "agy-..-escape")),
+    "traversal-shaped dirs are left alone",
+  );
   assert.ok(existsSync(env.ANTIGRAVITY_CC_HOME), "the store root itself must survive");
   assert.ok(!existsSync(join(env.ANTIGRAVITY_CC_HOME, "jobs", "agy-bbb-000001")));
 });
@@ -68,7 +82,7 @@ test("pruneJobs prunes across repositories, not just the current cwd", () => {
   assert.deepEqual(jobIds(env), ["agy-ccc-000002"]);
 });
 
-test("createJob prunes as a side effect and never throws when the store is odd", () => {
+test("createJob prunes as a side effect and protects the new job by identity", () => {
   const env = { ...envWithHome(), ANTIGRAVITY_CC_MAX_JOBS: "2", ANTIGRAVITY_CC_JOB_TTL_DAYS: "365" };
   seedJob(env, "agy-ddd-000001", { ageDays: 9 });
   seedJob(env, "agy-ddd-000002", { ageDays: 8 });
@@ -76,4 +90,35 @@ test("createJob prunes as a side effect and never throws when the store is odd",
   const kept = jobIds(env);
   assert.ok(kept.includes(fresh.id), "the job just created must never be pruned");
   assert.equal(kept.length, 2);
+});
+
+test("createJob keeps a backdated terminal job it just created under a zero cap", () => {
+  const env = { ...envWithHome(), ANTIGRAVITY_CC_MAX_JOBS: "0", ANTIGRAVITY_CC_JOB_TTL_DAYS: "0" };
+  const fresh = createJob(
+    {
+      kind: "delegate",
+      title: "new terminal job",
+      prompt: "p",
+      cwd: "/x",
+      status: "done",
+      startedAt: "2000-01-01T00:00:00.000Z",
+    },
+    env,
+  );
+
+  assert.ok(existsSync(fresh.paths.dir), "the job just created must survive regardless of metadata");
+});
+
+test("createJob still returns its record when pruning throws", () => {
+  const env = envWithHome();
+  Object.defineProperty(env, "ANTIGRAVITY_CC_JOB_TTL_DAYS", {
+    get() {
+      throw new Error("broken pruning configuration");
+    },
+  });
+
+  const fresh = createJob({ kind: "delegate", title: "new", prompt: "p", cwd: "/x" }, env);
+
+  assert.equal(fresh.title, "new");
+  assert.ok(existsSync(fresh.paths.meta), "the record is written before pruning fails");
 });

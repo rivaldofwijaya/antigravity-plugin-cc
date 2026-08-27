@@ -57,7 +57,7 @@ export function createJob(meta, env = process.env) {
   writeFileSync(paths.meta, JSON.stringify(record, null, 2));
   // Housekeeping, never load-bearing: a pruning failure must not fail a run.
   try {
-    pruneJobs(env);
+    pruneJobsInternal(env, id);
   } catch {
     /* ignore */
   }
@@ -156,7 +156,7 @@ function intFromEnv(env, name, fallback) {
  * @param {NodeJS.ProcessEnv} [env]
  * @returns {{deleted: string[]}}
  */
-export function pruneJobs(env = process.env) {
+function pruneJobsInternal(env, excludedId = null) {
   const root = jobsRoot(env);
   const deleted = [];
   if (!existsSync(root)) return { deleted };
@@ -170,7 +170,7 @@ export function pruneJobs(env = process.env) {
     if (!JOB_ID_RE.test(name)) continue; // never touch what we did not create
     const job = readJob(name, env);
     if (!job) continue;
-    const protectedJob = job.status === "running" || isAlive(job.pid);
+    const protectedJob = name === excludedId || job.status === "running" || isAlive(job.pid);
     candidates.push({ id: name, startedAt: job.startedAt || "", protectedJob });
   }
 
@@ -192,6 +192,10 @@ export function pruneJobs(env = process.env) {
   }
 
   return { deleted };
+}
+
+export function pruneJobs(env = process.env) {
+  return pruneJobsInternal(env);
 }
 
 export function listJobs(cwd, env = process.env) {
