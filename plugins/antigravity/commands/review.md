@@ -32,7 +32,7 @@ Then show the review verbatim, then add a one-line summary of the most important
 ## Notes
 
 - The review is contained: it runs in agy's OS sandbox with an explicit no-write instruction prepended, and Antigravity works from the git diff embedded in the prompt. This is not a hard write barrier; check `git status` afterwards.
-- Antigravity is in preview with a quota. If the review comes back empty, you're likely rate-limited — the companion surfaces the reset time when it can. Wait it out and rerun.
+- Antigravity is in preview with a quota. Quota exhaustion is a classified error: report the companion's error and reset time, then wait before rerunning. An `empty` result means the run completed with no review and no error; do not call it a clean review or quota exhaustion. Say that no review was produced, then use `/antigravity:resume` or inspect the reported log path.
 - First time? You need to be signed in to Antigravity once. Run `/antigravity:setup` to check, and if it reports you're not authed, type `! agy` to do the one-time Google OAuth in your browser.
 
 _Powered by Google Antigravity (`agy`). Forked from [Idun-Group/antigravity-plugin-cc](https://github.com/Idun-Group/antigravity-plugin-cc)._

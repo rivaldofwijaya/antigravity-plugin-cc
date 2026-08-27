@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const REPO = fileURLToPath(new URL("..", import.meta.url));
@@ -27,16 +28,27 @@ test("no document still claims agy has no --model flag", () => {
     "plugins",
     "docs/antigravity-cli-reference.md",
     "README.md",
+    "CONTRIBUTING.md",
   ]);
   assert.equal(hits, "", `stale --model claim found:\n${hits}`);
 });
 
 test("the CLI reference records the agy version it was verified against", () => {
-  const hits = grep("1\\.1\\.21", ["docs/antigravity-cli-reference.md"]);
+  const hits = grep("^> This contract was verified live against `agy 1\\.1\\.21`", [
+    "docs/antigravity-cli-reference.md",
+  ]);
   assert.notEqual(hits, "", "the reference must carry its verified-against version");
 });
 
 test("package.json points at this fork, not upstream", () => {
   const hits = grep("Idun-Group|Idun Labs|idunplatform", ["package.json"]);
   assert.equal(hits, "", `upstream metadata left in package.json:\n${hits}`);
+
+  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(pkg.author, "rivaldofwijaya (https://github.com/rivaldofwijaya)");
+  assert.equal(pkg.homepage, "https://github.com/rivaldofwijaya/antigravity-plugin-cc");
+  assert.deepEqual(pkg.repository, {
+    type: "git",
+    url: "https://github.com/rivaldofwijaya/antigravity-plugin-cc.git",
+  });
 });

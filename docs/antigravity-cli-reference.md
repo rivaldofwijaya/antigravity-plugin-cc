@@ -82,10 +82,13 @@ Available subcommands:
   update          Update CLI
 ```
 
-The companion uses print mode (`agy -p "<task>"`), always passes
-`--dangerously-skip-permissions`, and sets `--print-timeout 10m` unless the
-caller supplies another duration. It adds a 60-second process watchdog beyond
-that print timeout. Interactive `-i` needs a TTY and is not used.
+The companion uses print mode (`agy -p "<task>"`) and passes
+`--dangerously-skip-permissions` by default because `agy` cannot act in print
+mode without it. `--no-yolo` is the user's explicit opt-out and suppresses that
+flag. Neither choice turns the containment flags into a hard write barrier. The
+companion sets `--print-timeout 10m` unless the caller supplies another duration
+and adds a 60-second process watchdog beyond that print timeout. Interactive
+`-i` needs a TTY and is not used.
 
 ## Model selection
 

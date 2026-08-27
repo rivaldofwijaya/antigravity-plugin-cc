@@ -45,10 +45,11 @@ Keep it tight. A focused 8-line brief beats a 40-line essay; over-stuffed contex
 | `--plan` | yes | yes | no | "Tell me how you'd do it" — `agy`'s own planning mode. |
 | `review` | yes | no | yes | Always. Not overridable. |
 
-None of these is a hard write barrier. `--dangerously-skip-permissions` must stay
-on for print mode to act at all. The sandbox, plan mode, and no-write preamble
-are defence in depth; after every run, check `git status` before claiming that
-the real tree was untouched.
+None of these is a hard write barrier. The companion passes
+`--dangerously-skip-permissions` by default because `agy` cannot act in print
+mode without it; `--no-yolo` is the user's explicit opt-out and suppresses that
+flag. The sandbox, plan mode, and no-write preamble are defence in depth; after
+every run, check `git status` before claiming that the real tree was untouched.
 
 If you're unsure whether a task should write, start with `--plan` for a plan or
 `--read-only` for investigation, then re-run write-capable (or `resume` the
@@ -57,5 +58,5 @@ conversation) to apply it.
 ## Limits to be honest about
 
 - **Print mode won't ask you questions.** Ambiguity becomes a guess. Front-load the detail.
-- **Preview quota.** On quota exhaustion `agy` exits cleanly with empty output; the companion surfaces `RESOURCE_EXHAUSTED (429) ... Resets in <dur>`. If you see that, wait for the reset — re-prompting won't help.
+- **Preview quota.** Quota exhaustion is a classified error; the companion reports it as `RESOURCE_EXHAUSTED (429) ... Resets in <dur>`. Report that error and wait for the reset — re-prompting won't help. An `empty` result instead means the run completed with no output and no error: do not relabel it as quota exhaustion; say that no output was produced, then use `/antigravity:resume` or inspect the reported log path.
 - **Auth is the user's job.** OAuth via Google account, no API key. The plugin never logs anyone in.
