@@ -228,6 +228,26 @@ test("--effort with a bad value fails without ever spawning agy", () => {
   assert.equal(existsSync(sentinel), false, "agy must not have been spawned at all");
 });
 
+test("--effort with an empty value fails without ever spawning agy", () => {
+  const home = mkdtempSync(join(tmpdir(), "agy-home-"));
+  const cwd = mkdtempSync(join(tmpdir(), "agy-cwd-"));
+  const sentinel = join(home, "spawned.txt");
+  const res = spawnSync("node", [COMPANION, "delegate", "--effort=", "do it"], {
+    cwd,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      ANTIGRAVITY_CC_AGY_BIN: FAKE_AGY,
+      ANTIGRAVITY_CC_HOME: home,
+      FAKE_AGY_SPAWN_SENTINEL: sentinel,
+    },
+  });
+  assert.match(res.stdout, /low/);
+  assert.match(res.stdout, /medium/);
+  assert.match(res.stdout, /high/);
+  assert.equal(existsSync(sentinel), false, "agy must not have been spawned at all");
+});
+
 // T-A3
 test("a pre-1.1 agy that rejects the probe flags still returns the response", () => {
   const home = mkdtempSync(join(tmpdir(), "agy-home-"));

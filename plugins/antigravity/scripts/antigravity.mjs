@@ -134,8 +134,9 @@ function safeReaddir(dir) {
 // delegate / resume (shared core)
 // ---------------------------------------------------------------------------
 function runAgyTask(parsed, { kind, title, prompt, readOnly, resume }) {
-  const effort = parsed.valued.effort || null;
-  if (effort && !VALID_EFFORTS.has(effort)) {
+  const hasEffort = Object.hasOwn(parsed.valued, "effort");
+  const effort = hasEffort ? parsed.valued.effort : null;
+  if (hasEffort && !VALID_EFFORTS.has(effort)) {
     // Fail here rather than paying for an agy round-trip on a typo.
     out(
       render.renderCompanionError(kind, [
