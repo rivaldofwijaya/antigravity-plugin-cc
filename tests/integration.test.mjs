@@ -306,7 +306,8 @@ test("a foreground flag-rejection with partial stdout is reported as an error, n
 // Finding 2, end to end: a binary broken enough to fail even the post-
 // downgrade retry, with empty stdout both times, must report an error — not
 // the "no output at all" empty-result message, which would tell the user
-// nothing failed.
+// nothing failed. The retry exits 0 (agy's own failure-exit-code convention),
+// so this also covers exit code 0 never suppressing a genuine failure.
 test("a foreground binary that fails even after the downgrade retry is reported as an error, not empty", () => {
   const home = mkdtempSync(join(tmpdir(), "agy-home-"));
   const cwd = mkdtempSync(join(tmpdir(), "agy-cwd-"));
@@ -321,7 +322,7 @@ test("a foreground binary that fails even after the downgrade retry is reported 
     },
   });
   assert.match(res.stdout, /backend error/i);
-  assert.match(res.stdout, /permission denied/i);
+  assert.match(res.stdout, /panic: binary is broken/i);
   assert.doesNotMatch(res.stdout, /finished without producing any output/i);
 });
 

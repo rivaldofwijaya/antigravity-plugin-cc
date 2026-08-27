@@ -208,6 +208,43 @@ test("classifyRun ignores an unrecognized stderr pattern entirely", () => {
   assert.equal(r.outcome, "empty", "only a recognizable pattern is a signal; anything else must not misfire");
 });
 
+// Reviewer regression #1 — INVOCATION_FAILURE_RE used to include generic
+// substrings ("no such file or directory", "permission denied", "command not
+// found") that are common in ordinary tool/process stderr and have nothing to
+// do with the invocation itself failing. A real response on stdout must
+// survive such stderr noise, even with a nonzero exit code and after a
+// downgrade.
+test("classifyRun keeps a real response as a success despite generic stderr noise and a nonzero exit code", () => {
+  const r = classifyRun({
+    stdout: "Here is the full answer… All 12 tests pass.",
+    logText: "",
+    timedOut: false,
+    downgraded: true,
+    stderr: "ls: /nope: No such file or directory\n",
+    code: 1,
+  });
+  assert.equal(r.outcome, "success", "generic stderr text is not an invocation-failure signature");
+  assert.equal(r.responseText, "Here is the full answer… All 12 tests pass.");
+});
+
+// Reviewer regression #2 — classifyProcessFailure used to suppress on
+// `code === 0` alone, but agy itself exits 0 on its own genuine failures (see
+// the module doc), so exit code 0 is the least trustworthy value to key
+// suppression on. A recognizable invocation failure with no response on
+// stdout must still be reported as failed, regardless of exit code.
+test("classifyRun still reports a genuine invocation failure as failed when the exit code is 0", () => {
+  const r = classifyRun({
+    stdout: "",
+    logText: "",
+    timedOut: false,
+    stderr: "panic: binary is broken\n",
+    code: 0,
+  });
+  assert.equal(r.outcome, "failed", "exit code 0 must not suppress a recognizable invocation failure");
+  assert.equal(r.error.kind, "backend");
+  assert.match(r.error.message, /panic: binary is broken/);
+});
+
 test("classifyRun treats a spawn error (e.g. ENOENT) as a recognizable invocation failure", () => {
   const r = classifyRun({ stdout: "", logText: "", timedOut: false, spawnError: "ENOENT" });
   assert.equal(r.outcome, "failed");

@@ -17,8 +17,9 @@
 //   noisy-log-success  -> text success PLUS 1.1 startup auth noise in the log
 //   wrapped-quota      -> empty stdout, 1.1 wrapper-prefixed quota line in the log
 //   broken-binary      -> rejects --output-format like legacy-flag-error, but ALSO
-//                         rejects the post-downgrade retry (empty stdout, exit 126,
-//                         "permission denied" on stderr both times)
+//                         fails the post-downgrade retry (empty stdout, exit 0 —
+//                         agy itself exits 0 on its own failures — with a
+//                         "panic:" line on stderr)
 //   json-model-error   -> {"status":"ERROR", error: agy's REAL multi-line
 //                         model-selection error, verified live on 1.1.21}, exit 0
 //
@@ -120,13 +121,16 @@ if (mode === "flag-error-stdout") succeed();
 // A binary broken enough that even the post-downgrade retry fails, with empty
 // stdout both times — exercises the foreground "empty stdout, but the process
 // reported a recognizable invocation failure" shape end-to-end (Finding 2).
+// The retry exits 0 deliberately: agy itself exits 0 on its own failures, so
+// this also exercises that exit code 0 alone must never suppress a genuine
+// invocation failure (see classifyProcessFailure in result.mjs).
 if (mode === "broken-binary" && wantsJson) {
   process.stderr.write("flag provided but not defined: -output-format\n");
   process.exit(2);
 }
 if (mode === "broken-binary") {
-  process.stderr.write("permission denied\n");
-  process.exit(126);
+  process.stderr.write("panic: binary is broken\n");
+  process.exit(0);
 }
 
 if (mode === "quota") {

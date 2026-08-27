@@ -42,19 +42,24 @@ function normaliseConversationId(value) {
 // response — not a normal program's own error output. Modelled directly on
 // FLAG_REJECTION_RE in agy.mjs: we do not trust the exit code (agy exits 0 on
 // its own failures and a foreign nonzero exit is equally unreliable in the
-// other direction), only an unambiguous, narrow stderr pattern.
+// other direction), only an unambiguous, narrow stderr pattern. Deliberately
+// excludes generic strings like "no such file or directory", "permission
+// denied", or "command not found": those are among the most common substrings
+// in ordinary tool/process output and can appear in a model's own stderr
+// alongside a perfectly good stdout response, so treating them as invocation
+// signatures produces false positives.
 const INVOCATION_FAILURE_RE =
-  /flag provided but not defined|not defined: --|unknown flag|invalid flag|panic:|no such file or directory|permission denied|command not found/i;
+  /flag provided but not defined|not defined: --|unknown flag|invalid flag|panic:/i;
 
 /**
  * Recognise a process-level invocation failure from stderr / a spawn error.
  * Returns null when nothing recognisable is present — the caller must then
  * trust whatever stdout/the log already said, exit code included.
  *
- * @param {{stderr?: string, code?: number|null, spawnError?: string}} input
+ * @param {{stdout?: string, stderr?: string, code?: number|null, spawnError?: string}} input
  * @returns {{kind:"backend", message:string, resetsIn:null}|null}
  */
-function classifyProcessFailure({ stderr, code, spawnError }) {
+function classifyProcessFailure({ stdout, stderr, code, spawnError }) {
   if (spawnError) {
     return {
       kind: "backend",
@@ -64,11 +69,15 @@ function classifyProcessFailure({ stderr, code, spawnError }) {
   }
   const text = typeof stderr === "string" ? stderr.trim() : "";
   if (!text || !INVOCATION_FAILURE_RE.test(text)) return null;
-  // A background job has no captured exit code (the process is detached), so
-  // `code` is undefined there and this check is skipped. When we DO have one
-  // and it is exactly 0, a clean exit alongside stray stderr noise that merely
-  // resembles the pattern is not treated as a failure.
-  if (typeof code === "number" && code === 0) return null;
+  // agy exits 0 on its own failures too (see the module doc), so exit code 0
+  // BY ITSELF is not evidence of a clean run — keying suppression on it alone
+  // (as this used to) suppresses genuine invocation failures just because agy
+  // happened to exit 0. What actually marks a run as "clean, with stray
+  // stderr noise that merely resembles the pattern" is a real response having
+  // landed on stdout; exit code 0 on its own, with no such response, is not
+  // that signal and must not suppress a recognisable failure.
+  const hasRealResponse = typeof stdout === "string" && stdout.trim() !== "";
+  if (code === 0 && hasRealResponse) return null;
   const firstLine = text.split(/\r?\n/).find((l) => l.trim()) || text;
   return { kind: "backend", message: firstLine.trim(), resetsIn: null };
 }
@@ -226,7 +235,7 @@ export function classifyRun({ stdout, logText, timedOut, printTimeout, downgrade
     };
   }
 
-  const processFailure = classifyProcessFailure({ stderr, code, spawnError });
+  const processFailure = classifyProcessFailure({ stdout, stderr, code, spawnError });
 
   const json = downgraded ? null : parseAgyJson(stdout);
   if (json && typeof json.status === "string") {
