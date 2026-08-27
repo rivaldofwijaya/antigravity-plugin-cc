@@ -1,7 +1,7 @@
 # Contributing to antigravity-plugin-cc
 
 Thanks for helping out. This plugin lets Claude Code users drive Google's
-Antigravity CLI (`agy`, powered by Gemini 3.5) without leaving Claude Code.
+Antigravity CLI (`agy`) without leaving Claude Code.
 Contributions that keep it thin, honest, and dependency-free are very welcome.
 
 ## Repo layout
@@ -60,8 +60,10 @@ the cause.
 A few facts that must stay true (don't contradict them):
 
 - The binary is `agy`. Print mode is `agy -p`.
-- There is **no** `--model` / `-m` flag. The model is picked with `/model`
-  inside `agy` and persisted in `settings.json`. Never tell users to pass one.
+- `--model <id>` and `--effort low|medium|high` are per-run controls; with no
+  model flag, `agy` uses the default selected with `/model` in its TUI.
+- `--plan` means `--mode plan` plus `--sandbox`; it asks for a plan rather than
+  a change.
 - `delegate` is write-capable by default; `--read-only` / `--sandbox` contain it.
 - `review` is always read-only and sandboxed.
 

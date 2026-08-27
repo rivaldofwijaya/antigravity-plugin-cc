@@ -12,4 +12,4 @@ Run exactly this and show the output verbatim:
 node "${CLAUDE_PLUGIN_ROOT}/scripts/antigravity.mjs" result $ARGUMENTS
 ```
 
-Present the companion's stdout as-is. Do not summarize, reformat, or add commentary. Use the `antigravity-result-handling` skill to interpret what came back — a finished response (verify any file edits with `git diff`) versus a quota/auth/backend error. To continue the same thread, use `/antigravity:resume --conversation <id>`.
+Present the companion's stdout as-is. Do not summarize, reformat, or add commentary. Use the `antigravity-result-handling` skill to interpret what came back — a finished response (verify any file edits with `git diff`), an `empty` run with neither output nor error, or a quota/auth/backend error. To continue the same thread, use `/antigravity:resume --conversation <id>`.

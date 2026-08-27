@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Antigravity companion for Claude Code.
 //
-// Thin, dependency-free runtime that drives the `agy` CLI (Google Antigravity,
-// Gemini 3) in print mode and manages background jobs. Each subcommand prints
+// Thin, dependency-free runtime that drives the `agy` CLI (Google Antigravity)
+// in print mode and manages background jobs. Each subcommand prints
 // Markdown that the calling slash command / subagent relays to the user verbatim.
 //
 // Subcommands: setup | delegate | review | resume | status | result | cancel

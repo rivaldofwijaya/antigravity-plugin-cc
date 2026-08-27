@@ -1,10 +1,10 @@
 ---
-description: Cross-model code review of your changes by Gemini 3.5 (read-only, contained).
+description: Cross-model code review of your changes by Antigravity (read-only, contained).
 argument-hint: "[--base <ref>] [--background] [focus text]"
 allowed-tools: Bash(node:*)
 ---
 
-Get a second pair of eyes on your work. This runs a **contained** review of your current changes through Antigravity (Gemini 3.5) and brings the findings straight back into Claude Code. Gemini works from the diff embedded in the prompt, under agy's OS sandbox and an explicit no-write instruction, so it should report rather than edit. Note that your diff is sent to Google as part of the prompt.
+Get a second pair of eyes on your work. This runs a **contained** review of your current changes through Antigravity and brings the findings straight back into Claude Code. Antigravity works from the diff embedded in the prompt, under agy's OS sandbox and an explicit no-write instruction, so it should report rather than edit. Note that your diff is sent to Google as part of the prompt.
 
 Run the companion and present its output:
 
@@ -18,7 +18,7 @@ Then show the review verbatim, then add a one-line summary of the most important
 
 - **No `--base`** — reviews your **uncommitted changes** (working tree vs HEAD). This is the default and the common case.
 - **`--base <ref>`** — reviews `<ref>...HEAD` instead. Use `--base main` to review the whole branch, `--base HEAD~3` for the last three commits.
-- **Trailing focus text** — anything after the flags steers the review. Point Gemini at what you care about: `security`, `error handling`, `the new retry logic`, `concurrency bugs`.
+- **Trailing focus text** — anything after the flags steers the review. Point Antigravity at what you care about: `security`, `error handling`, `the new retry logic`, `concurrency bugs`.
 - **`--background`** — for large diffs, run it as a job and keep working. You get a job id back; check progress with `/antigravity:status` and pull the finished review with `/antigravity:result`.
 
 ## Examples
@@ -31,8 +31,8 @@ Then show the review verbatim, then add a one-line summary of the most important
 
 ## Notes
 
-- The review is contained: it runs in agy's OS sandbox with an explicit no-write instruction prepended, and Gemini works from the git diff embedded in the prompt. Nothing in your repo should change — if you want certainty rather than expectation, check `git status` afterwards.
+- The review is contained: it runs in agy's OS sandbox with an explicit no-write instruction prepended, and Antigravity works from the git diff embedded in the prompt. This is not a hard write barrier; check `git status` afterwards.
 - Antigravity is in preview with a quota. If the review comes back empty, you're likely rate-limited — the companion surfaces the reset time when it can. Wait it out and rerun.
 - First time? You need to be signed in to Antigravity once. Run `/antigravity:setup` to check, and if it reports you're not authed, type `! agy` to do the one-time Google OAuth in your browser.
 
-_Powered by Google Antigravity (`agy`, Gemini 3.5). Plugin by Idun Labs._
+_Powered by Google Antigravity (`agy`). Forked from [Idun-Group/antigravity-plugin-cc](https://github.com/Idun-Group/antigravity-plugin-cc)._

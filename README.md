@@ -1,12 +1,12 @@
 # antigravity-plugin-cc
 
-> Drive Google's Antigravity CLI (`agy`, powered by Gemini 3.5) without leaving Claude Code.
+> Drive Google's Antigravity CLI (`agy`) without leaving Claude Code.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 [![Fork of Idun-Group/antigravity-plugin-cc](https://img.shields.io/badge/fork%20of-Idun--Group%2Fantigravity--plugin--cc-6E56CF.svg)](https://github.com/Idun-Group/antigravity-plugin-cc)
-[![Powered by agy / Gemini 3.5](https://img.shields.io/badge/powered%20by-agy%20%2F%20Gemini%203.5-4285F4.svg)](https://antigravity.google/docs/cli-overview)
+[![Powered by agy / Antigravity](https://img.shields.io/badge/powered%20by-agy%20%2F%20Antigravity-4285F4.svg)](https://antigravity.google/docs/cli-overview)
 
-A Claude Code plugin that hands work to `agy`, Google's Antigravity CLI, and brings the result back into your session. Use Gemini 3.5 for a second opinion on a diff, or to run a task in parallel while you keep working. It runs on its own quota, so it doesn't draw down your Claude Code usage.
+A Claude Code plugin that hands work to `agy`, Google's Antigravity CLI, and brings the result back into your session. Use Antigravity for a second opinion on a diff, or to run a task in parallel while you keep working. It runs on its own quota, so it doesn't draw down your Claude Code usage.
 
 ## Requirements
 
@@ -39,7 +39,7 @@ Sign in once, interactively. In Claude Code, type `! agy`, complete the OAuth fl
 
 | Command | What it does |
 | --- | --- |
-| `/antigravity:delegate` | Hand a task to Gemini 3.5. Write-capable by default; `--read-only` or `--sandbox` contains it, `--background` detaches it. |
+| `/antigravity:delegate` | Hand a task to Antigravity. Write-capable by default; `--read-only` or `--sandbox` contains it, `--plan` asks for a sandboxed plan, and `--background` detaches it. |
 | `/antigravity:review` | Cross-model review of your diff (or `base...HEAD`). Sandboxed, with a no-write instruction. Your diff is sent to Google in the prompt. |
 | `/antigravity:resume` | Continue the last conversation, or a specific one via `--conversation <uuid>`. |
 | `/antigravity:status` | List background jobs for this repo, or inspect one. |
@@ -53,6 +53,7 @@ Sign in once, interactively. In Claude Code, type `! agy`, complete the OAuth fl
 
 /antigravity:delegate add a --json flag to the export command and update the tests
 /antigravity:delegate --read-only explain how the retry logic in client.ts works
+/antigravity:delegate --plan outline the safest migration to the new API
 /antigravity:delegate --background port the utils module from CommonJS to ESM
    → returns a job id, e.g. agy-l3k9zf-a8x2qd
 
@@ -67,9 +68,9 @@ Job ids look like `agy-<id>`; conversation ids are UUIDs. `status`, `result`, an
 
 **Containment:** `agy` has no true read-only mode. `--read-only` and `--sandbox` narrow what it can touch, but they don't make writes impossible, so check `git status` when it matters.
 
-**Choosing the model:** there is no `--model` flag on `agy`. The model (default Gemini 3.5 Flash) is chosen with `/model` *inside* `agy` and persisted in its `settings.json`. Run `! agy`, type `/model`, pick one, and that choice sticks for headless runs too.
+**Choosing the model:** `--model <id>` selects a model per run; `agy models` lists the current IDs. Add `--effort low|medium|high` to choose reasoning effort. With no `--model`, `agy` uses the default set with `/model` in its TUI.
 
-**Empty output but no error:** on quota exhaustion `agy` exits `0` with empty stdout. The companion reads `agy`'s log and reports what actually happened: `RESOURCE_EXHAUSTED (429) … Resets in <duration>`, auth failures, and backend errors the exit code hides. The quota is per Google account and this is a preview-tier limit, not a bug. Wait for the reset, or sign `agy` into a different account.
+**Outcomes and hidden failures:** `agy --output-format json` exits `0` for both success and error objects. The companion classifies the JSON, with a one-shot text/log fallback for older binaries, and reports quota, auth, and backend errors that the exit code hides. A run that genuinely completes with neither output nor an error is reported separately as `empty`; use `/antigravity:resume` or the printed log path to investigate. Quota is per Google account; wait for the reset or sign `agy` into a different account.
 
 **`agy` in a custom path:** the companion looks on `PATH`, then `~/.local/bin/agy`. Set `ANTIGRAVITY_CC_AGY_BIN` to point it elsewhere.
 
