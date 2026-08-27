@@ -1,7 +1,7 @@
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, chmodSync, writeFileSync, readdirSync, readFileSync } from "node:fs";
+import { mkdtempSync, chmodSync, writeFileSync, readdirSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -152,4 +152,124 @@ test("review runs contained and carries the no-write instruction", () => {
   const prompt = promptSentFor(["review"], { cwd });
   assert.match(prompt, /READ-ONLY RUN/);
   assert.match(prompt, /senior code reviewer/);
+});
+
+// Records the argv the companion actually handed to agy, by having the fake
+// write it next to the job. Simpler than intercepting the spawn.
+function argvSentFor(args, { mode = "success" } = {}) {
+  const home = mkdtempSync(join(tmpdir(), "agy-home-"));
+  const cwd = mkdtempSync(join(tmpdir(), "agy-cwd-"));
+  const argvFile = join(home, "argv.json");
+  execFileSync("node", [COMPANION, ...args], {
+    cwd,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      ANTIGRAVITY_CC_AGY_BIN: FAKE_AGY,
+      ANTIGRAVITY_CC_HOME: home,
+      FAKE_AGY_MODE: mode,
+      FAKE_AGY_ARGV_FILE: argvFile,
+    },
+  });
+  return JSON.parse(readFileSync(argvFile, "utf8"));
+}
+
+// T-A6 — the B4 regression test.
+test("--model reaches agy's argv and produces no warning", () => {
+  const home = mkdtempSync(join(tmpdir(), "agy-home-"));
+  const cwd = mkdtempSync(join(tmpdir(), "agy-cwd-"));
+  const argvFile = join(home, "argv.json");
+  const res = spawnSync(
+    "node",
+    [COMPANION, "delegate", "--model", "gemini-3.1-pro-high", "refactor the parser"],
+    {
+      cwd,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        ANTIGRAVITY_CC_AGY_BIN: FAKE_AGY,
+        ANTIGRAVITY_CC_HOME: home,
+        FAKE_AGY_MODE: "success",
+        FAKE_AGY_ARGV_FILE: argvFile,
+      },
+    },
+  );
+  const argv = JSON.parse(readFileSync(argvFile, "utf8"));
+  assert.equal(argv[argv.indexOf("--model") + 1], "gemini-3.1-pro-high");
+  assert.doesNotMatch(res.stderr, /no --model flag|Ignoring --model/i);
+  assert.doesNotMatch(res.stdout, /refactor the parser.*--model/s, "the flag must not leak into the prompt");
+});
+
+// T-A5
+test("--plan produces both --mode plan and --sandbox", () => {
+  const argv = argvSentFor(["delegate", "--plan", "add caching"]);
+  assert.equal(argv[argv.indexOf("--mode") + 1], "plan");
+  assert.ok(argv.includes("--sandbox"));
+});
+
+// T-A4
+test("--effort with a bad value fails without ever spawning agy", () => {
+  const home = mkdtempSync(join(tmpdir(), "agy-home-"));
+  const cwd = mkdtempSync(join(tmpdir(), "agy-cwd-"));
+  const sentinel = join(home, "spawned.txt");
+  const res = spawnSync("node", [COMPANION, "delegate", "--effort", "bogus", "do it"], {
+    cwd,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      ANTIGRAVITY_CC_AGY_BIN: FAKE_AGY,
+      ANTIGRAVITY_CC_HOME: home,
+      FAKE_AGY_SPAWN_SENTINEL: sentinel,
+    },
+  });
+  assert.match(res.stdout, /low/);
+  assert.match(res.stdout, /medium/);
+  assert.match(res.stdout, /high/);
+  assert.equal(existsSync(sentinel), false, "agy must not have been spawned at all");
+});
+
+// T-A3
+test("a pre-1.1 agy that rejects the probe flags still returns the response", () => {
+  const home = mkdtempSync(join(tmpdir(), "agy-home-"));
+  const cwd = mkdtempSync(join(tmpdir(), "agy-cwd-"));
+  const res = spawnSync("node", [COMPANION, "delegate", "summarize the repo"], {
+    cwd,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      ANTIGRAVITY_CC_AGY_BIN: FAKE_AGY,
+      ANTIGRAVITY_CC_HOME: home,
+      FAKE_AGY_MODE: "legacy-flag-error",
+    },
+  });
+  assert.match(res.stdout, /Antigravity \(fake\) reply/);
+  assert.match(res.stderr, /retrying without them/i, "the downgrade note belongs on stderr");
+  assert.doesNotMatch(res.stdout, /retrying without them/i, "stdout is relayed verbatim; keep it clean");
+});
+
+// T-L4 — the §4.6 false-positive guard.
+test("startup auth noise in a successful run's log is never reported as an auth error", () => {
+  const { stdout } = run(["delegate", "explain the build"], { mode: "noisy-log-success" });
+  assert.match(stdout, /Antigravity \(fake\) reply/);
+  assert.doesNotMatch(stdout, /not authenticated/i);
+  assert.doesNotMatch(stdout, /sign in/i);
+});
+
+// The B1 fix, end to end, through the JSON path.
+test("a signed-out JSON run reports an auth error with sign-in guidance", () => {
+  const { stdout } = run(["delegate", "anything"], { mode: "json-auth" });
+  assert.match(stdout, /not authenticated/i);
+  assert.match(stdout, /agy/);
+});
+
+test("a wrapper-prefixed quota log is still reported as quota exhaustion", () => {
+  const { stdout } = run(["delegate", "expensive"], { mode: "wrapped-quota" });
+  assert.match(stdout, /quota is exhausted/i);
+  assert.match(stdout, /152h59m39s/);
+  assert.doesNotMatch(stdout, /logging before google\.Init/);
+});
+
+test("a successful JSON run reports usage below the fence", () => {
+  const { stdout } = run(["delegate", "summarize the repo"], { mode: "success" });
+  assert.match(stdout, /Antigravity: [\d,]+ tokens · 1 turn/);
 });

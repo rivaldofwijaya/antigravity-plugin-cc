@@ -24,6 +24,15 @@ import { writeFileSync } from "node:fs";
 
 const argv = process.argv.slice(2);
 
+// Test hooks: record the argv we were handed, and prove we ran at all.
+// `writeFileSync` is already imported at the top of this file.
+if (process.env.FAKE_AGY_ARGV_FILE) {
+  writeFileSync(process.env.FAKE_AGY_ARGV_FILE, JSON.stringify(argv, null, 2));
+}
+if (process.env.FAKE_AGY_SPAWN_SENTINEL) {
+  writeFileSync(process.env.FAKE_AGY_SPAWN_SENTINEL, "spawned\n");
+}
+
 if (argv.includes("--version")) {
   process.stdout.write("9.9.9-fake\n");
   process.exit(0);

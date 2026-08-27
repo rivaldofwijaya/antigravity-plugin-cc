@@ -12,8 +12,15 @@ const VALUED_FLAGS = new Set([
   "base",
   "conversation",
   "print-timeout",
-  "model", // accepted + warned about; agy has no model flag (see docs)
+  "model",  // forwarded to agy --model; agy validates and enumerates on rejection
+  "effort", // forwarded to agy --effort; validated here, see VALID_EFFORTS
 ]);
+
+/**
+ * agy's three reasoning levels. Validated companion-side so a typo costs a
+ * message, not an agy round-trip.
+ */
+export const VALID_EFFORTS = new Set(["low", "medium", "high"]);
 
 const REPEATABLE_VALUED_FLAGS = new Set(["add-dir"]);
 

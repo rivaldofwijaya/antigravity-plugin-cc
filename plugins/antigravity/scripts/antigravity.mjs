@@ -11,7 +11,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-import { parseArgs, hasFlag } from "./lib/args.mjs";
+import { parseArgs, hasFlag, VALID_EFFORTS } from "./lib/args.mjs";
 import { resolveAgyBinary, agyConfigDir } from "./lib/paths.mjs";
 import {
   READ_ONLY_PREAMBLE,
@@ -23,6 +23,7 @@ import {
   readLogSafe,
 } from "./lib/agy.mjs";
 import { scanAgyLog } from "./lib/logscan.mjs";
+import { classifyRun } from "./lib/result.mjs";
 import { resolveReviewTarget } from "./lib/git.mjs";
 import {
   createJob,
@@ -133,10 +134,27 @@ function safeReaddir(dir) {
 // delegate / resume (shared core)
 // ---------------------------------------------------------------------------
 function runAgyTask(parsed, { kind, title, prompt, readOnly, resume }) {
+  const effort = parsed.valued.effort || null;
+  if (effort && !VALID_EFFORTS.has(effort)) {
+    // Fail here rather than paying for an agy round-trip on a typo.
+    out(
+      render.renderCompanionError(kind, [
+        `\`--effort ${effort}\` is not a valid reasoning level.`,
+        "",
+        "Use one of `low`, `medium`, `high`.",
+      ]),
+    );
+    return;
+  }
+
   const bin = requireBinaryOrExit();
   const cwd = process.cwd();
 
-  const sandbox = hasFlag(parsed, "sandbox") || Boolean(readOnly);
+  const plan = hasFlag(parsed, "plan");
+  // `--plan` asks agy for a plan instead of a change, so it is contained too.
+  // `--read-only` deliberately does NOT imply plan mode: plan mode changes what
+  // the agent produces, and "explain how X works" wants prose, not a plan.
+  const sandbox = hasFlag(parsed, "sandbox") || Boolean(readOnly) || plan;
   // Write-capable by default for a delegate the user explicitly asked for; agy
   // needs --dangerously-skip-permissions to act at all in print mode. The
   // unprompted path is closed in the subagent, not here.
@@ -145,13 +163,9 @@ function runAgyTask(parsed, { kind, title, prompt, readOnly, resume }) {
   const conversationId = parsed.valued.conversation || null;
   const printTimeout = parsed.valued["print-timeout"] || "10m";
   const addDirs = [cwd, ...(parsed.repeated["add-dir"] || [])];
-
-  if (parsed.valued.model) {
-    // agy has no model flag; warn but continue. (See docs/antigravity-cli-reference.md)
-    process.stderr.write(
-      "[antigravity-plugin-cc] note: agy has no --model flag; set the default model with /model inside agy. Ignoring --model.\n",
-    );
-  }
+  // Passed through unvalidated: agy's own rejection message enumerates every
+  // available model, which beats any list we could hardcode and maintain.
+  const model = parsed.valued.model || null;
 
   // A contained run gets its no-write directive prepended BEFORE clamping, so the
   // instruction survives even when a large prompt is truncated from the tail.
@@ -168,6 +182,9 @@ function runAgyTask(parsed, { kind, title, prompt, readOnly, resume }) {
     conversationId,
     logFile: job.paths.log,
     printTimeout,
+    model,
+    effort,
+    mode: plan ? "plan" : undefined,
   });
 
   if (background) {
@@ -186,40 +203,42 @@ function runAgyTask(parsed, { kind, title, prompt, readOnly, resume }) {
 
   const watchdogMs = goDurationToMs(printTimeout) + 60_000;
   const result = runForeground({ bin: bin.path, args, cwd, logFile: job.paths.log, watchdogMs });
-  const scan = scanAgyLog(result.logText);
-  job.conversationId = scan.conversationId || job.conversationId;
+  const run = classifyRun({
+    stdout: result.stdout,
+    logText: result.logText,
+    timedOut: result.timedOut,
+    printTimeout,
+  });
 
-  const responseText = result.stdout.trim();
-  if (responseText) {
-    job.status = "done";
-    writeJob(job);
-    out(render.renderResponse(responseText, { title, conversationId: job.conversationId }));
-    return;
-  }
-
-  if (result.timedOut) {
-    job.status = "failed";
-    job.error = `timed out after ${printTimeout}`;
-    writeJob(job);
-    out(
-      render.renderError(
-        { kind: "backend", message: `Antigravity timed out after ${printTimeout}. Try --print-timeout 20m or run with --background.` },
-        { title, conversationId: job.conversationId, logFile: job.paths.log },
-      ),
-    );
-    return;
-  }
-
-  job.status = scan.error ? "failed" : "done";
-  job.error = scan.error ? scan.error.message : null;
+  job.conversationId = run.conversationId || job.conversationId;
+  job.status = statusForOutcome(run.outcome);
+  job.error = run.error
+    ? run.error.message + (run.error.resetsIn ? ` (resets in ${run.error.resetsIn})` : "")
+    : null;
+  job.finishedAt = new Date().toISOString();
   writeJob(job);
-  out(render.renderError(scan.error, { title, conversationId: job.conversationId, logFile: job.paths.log }));
+
+  const meta = { title, conversationId: job.conversationId, logFile: job.paths.log };
+  if (run.outcome === "success") {
+    out(
+      render.renderResponse(run.responseText, {
+        ...meta,
+        usage: run.usage,
+        durationSeconds: run.durationSeconds,
+        numTurns: run.numTurns,
+      }),
+    );
+  } else if (run.outcome === "empty") {
+    out(render.renderEmpty(meta));
+  } else {
+    out(render.renderError(run.error, meta));
+  }
 }
 
 function cmdDelegate(parsed) {
   const task = parsed.text;
   if (!task) {
-    out("# 🛰️ Antigravity — delegate\n\nWhat should Antigravity (Gemini 3) work on? Pass the task, e.g.\n`/antigravity:delegate investigate why the auth tests fail and propose a fix`.");
+    out("# 🛰️ Antigravity — delegate\n\nWhat should Antigravity work on? Pass the task, e.g.\n`/antigravity:delegate investigate why the auth tests fail and propose a fix`.");
     return;
   }
   runAgyTask(parsed, { kind: "delegate", title: truncate(task, 80), prompt: task, readOnly: hasFlag(parsed, "read-only") });
@@ -342,11 +361,13 @@ function truncate(s, n) {
 function usage() {
   out(
     [
-      "antigravity companion — drive the Antigravity CLI (agy / Gemini 3) from Claude Code",
+      "antigravity companion — drive the Antigravity CLI (agy) from Claude Code",
       "",
       "Usage: node antigravity.mjs <subcommand> [args]",
       "  setup [--json]",
-      "  delegate <task> [--background] [--sandbox] [--read-only] [--continue] [--conversation <id>] [--add-dir <p>] [--print-timeout <dur>]",
+      "  delegate <task> [--background] [--sandbox] [--read-only] [--plan] [--continue]",
+      "           [--conversation <id>] [--add-dir <p>] [--print-timeout <dur>]",
+      "           [--model <id>] [--effort low|medium|high]",
       "  review [--base <ref>] [--background] [focus text...]",
       "  resume <follow-up> [--conversation <id>] [--background]",
       "  status [job-id]",
@@ -379,6 +400,12 @@ function main() {
     default:
       return usage();
   }
+}
+
+function statusForOutcome(outcome) {
+  if (outcome === "success") return "done";
+  if (outcome === "empty") return "empty";
+  return "failed";
 }
 
 main();

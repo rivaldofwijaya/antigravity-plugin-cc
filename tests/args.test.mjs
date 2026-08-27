@@ -48,3 +48,21 @@ test("hasFlag matches any alias", () => {
   assert.equal(hasFlag(p, "background", "wait"), true);
   assert.equal(hasFlag(p, "background"), false);
 });
+
+import { VALID_EFFORTS } from "../plugins/antigravity/scripts/lib/args.mjs";
+
+test("--effort is a valued flag, not swallowed as a boolean", () => {
+  const p = parseArgs(["--effort", "high", "do", "the", "thing"]);
+  assert.equal(p.valued.effort, "high");
+  assert.equal(p.text, "do the thing");
+});
+
+test("--model keeps its value and stays out of the prompt text", () => {
+  const p = parseArgs(["--model", "gemini-3.1-pro-high", "refactor"]);
+  assert.equal(p.valued.model, "gemini-3.1-pro-high");
+  assert.equal(p.text, "refactor");
+});
+
+test("VALID_EFFORTS is exactly agy's three levels", () => {
+  assert.deepEqual([...VALID_EFFORTS].sort(), ["high", "low", "medium"]);
+});
