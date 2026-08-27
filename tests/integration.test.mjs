@@ -35,7 +35,7 @@ test("setup --json reports ready when the (fake) binary resolves", () => {
 
 test("delegate (foreground success) returns the model response + conversation id", () => {
   const { stdout } = run(["delegate", "summarize the repo"], { mode: "success" });
-  assert.match(stdout, /Gemini 3 \(fake\) reply/);
+  assert.match(stdout, /Antigravity \(fake\) reply/);
   assert.match(stdout, /summarize the repo/);
   assert.match(stdout, /Antigravity conversation:/);
   assert.match(stdout, /abcd1234-ef56-7890-abcd-1234567890ef/);
