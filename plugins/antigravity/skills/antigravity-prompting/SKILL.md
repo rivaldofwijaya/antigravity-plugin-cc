@@ -11,15 +11,19 @@ This guide is the short version. The depth lives in two reference files:
 - **[Recipes](references/antigravity-recipes.md)** — copy-paste templates for fixes, features, review, investigation, refactor, and tests.
 - **[Anti-patterns](references/antigravity-antipatterns.md)** — the common mistakes and their fixes.
 
-## How Antigravity behaves (and how to prompt for it)
+## Writing a brief that survives print mode
 
-The following behavioural guidance applies across the models served by Antigravity:
+These are properties of the print-mode interface and of briefs that have worked here, not
+measured claims about every model Antigravity serves. Write against them as defaults, and
+let a run's actual result correct them.
 
-- **It follows instructions literally.** If you say "fix the bug," it fixes *a* bug its own way. If you say "make `parseDate` return `null` on empty input and add a test for it," you get exactly that. Spell out the target behavior, not the vibe.
-- **It is terse by default.** Antigravity gives direct answers and skips narration unless you ask for it. If you want a written plan or an explanation of the change, request it explicitly.
-- **It plans and reasons over multiple steps.** It is strong at decomposing a goal into steps and executing them. Give it the *goal* and the *constraints*; let it own the *how*. Over-scripting the steps fights the model.
-- **It handles long context well, but cares about order.** Put the data/code/diff first, then your instruction last. Anchor the ask to the material ("Based on the diff above, ..."). Critical constraints — especially "do NOT touch X" — go at the **end** of the prompt; Antigravity can drop a negative constraint that appears too early in a long prompt.
-- **One markup style, used consistently.** Markdown headings or simple labels are enough. Don't mix XML tags and Markdown in the same prompt.
+- **Say what “done” looks like, not what to do.** "Fix the bug" leaves the agent to choose which bug and what fixed means. "`parseDate` returns `null` for empty input, with a test covering it" is checkable by you and by the agent, and it is the single change that most often turns a wasted run into a usable one.
+- **Ask for the output you want.** One prompt in, one result out: nothing downstream can prompt for the plan, the rationale, or the summary of the change, so request it in the brief or do without it.
+- **Give the goal and the constraints; leave the route open.** Over-scripting each step spends the brief on decisions the agent can make from the repository.
+- **Material first, instruction last, restrictions at the end.** Put the code, diff, or data first and anchor the ask to it ("Based on the diff above, …"). Put "do NOT change X" in the closing lines — a negative constraint buried early in a long prompt is the one most often lost.
+- **One markup style throughout.** Markdown headings or plain labels are enough. Mixing XML tags and Markdown blurs the line between instruction and data.
+
+If a run misses the target, re-read the brief for the acceptance criterion you left out before you re-run it.
 
 Pick the model through the companion, not in the natural-language prompt. Use `--model <id>` for a per-run selection and `--effort low|medium|high` for reasoning effort. With no `--model`, `agy` uses the user's default selected with `/model` in the TUI. The companion deliberately lets `agy` validate model IDs so its error can enumerate the currently available choices.
 

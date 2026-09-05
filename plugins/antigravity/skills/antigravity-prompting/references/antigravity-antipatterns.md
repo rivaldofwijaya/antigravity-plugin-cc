@@ -6,7 +6,7 @@ The mistakes that waste a delegate run, and how to fix each. Grounded in establi
 
 ### 1. Vague goal
 
-**Mistake:** "Clean up the auth code" / "make this better." Antigravity follows instructions literally — give it a fuzzy goal and you get a confident, fuzzy change you then have to undo.
+**Mistake:** "Clean up the auth code" / "make this better." Print mode cannot ask which one you meant, so a fuzzy goal returns a confident, fuzzy change you then have to undo.
 
 **Fix:** State one concrete outcome. "Extract the duplicated email validation in the three handlers into one shared function, behavior unchanged."
 
@@ -22,7 +22,7 @@ The mistakes that waste a delegate run, and how to fix each. Grounded in establi
 
 ### 3. Over-stuffed context
 
-**Mistake:** Pasting whole files, long history, and three tangents "for context." Antigravity handles long context well, but the real ask gets buried and the model optimizes for the wrong thing.
+**Mistake:** Pasting whole files, long history, and three tangents "for context." The real ask gets buried, and what gets optimised is whatever was most prominent.
 
 **Fix:** Include only what's needed. Point at files by path ("where to look: src/auth/login.ts") instead of pasting them — the agent can read the repo. Put the material first and the instruction last.
 
@@ -30,7 +30,7 @@ The mistakes that waste a delegate run, and how to fix each. Grounded in establi
 
 ### 4. Critical constraints buried at the top
 
-**Mistake:** Opening with "don't touch the public API" then writing 30 lines of detail. In a long prompt, Antigravity can drop a negative or quantitative constraint that appears too early.
+**Mistake:** Opening with "don't touch the public API" then writing 30 lines of detail. In a long prompt, a negative or quantitative constraint that appears early is the one most often dropped.
 
 **Fix:** Put the most important restrictions — especially "do NOT change X" — as the **final** lines of the prompt, where they anchor the model's last reasoning step.
 

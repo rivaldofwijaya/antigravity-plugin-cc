@@ -113,3 +113,24 @@ test("a write-capable run is measured against a recorded baseline", () => {
     "the thin-forwarder contract must survive intact",
   );
 });
+
+test("prompting guidance does not claim uniform behaviour across served models", () => {
+  const p = "plugins/antigravity/skills/antigravity-prompting/SKILL.md";
+  const text = readFileSync(p, "utf8");
+  assert.ok(
+    !text.includes("applies across the models served by Antigravity"),
+    "the universal behavioural claim must be gone",
+  );
+  assert.ok(
+    text.includes("## Writing a brief that survives print mode"),
+    "the section must be reframed around the brief",
+  );
+  assert.ok(
+    text.includes("properties of the print-mode interface"),
+    "the guidance must state what it is grounded in",
+  );
+  assert.ok(
+    text.includes("Say what “done” looks like"),
+    "the guidance must lead with acceptance criteria",
+  );
+});
