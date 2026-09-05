@@ -134,3 +134,16 @@ test("prompting guidance does not claim uniform behaviour across served models",
     "the guidance must lead with acceptance criteria",
   );
 });
+
+test("the recipes reference does not restate the universal model-behaviour claim", () => {
+  const p = "plugins/antigravity/skills/antigravity-prompting/references/antigravity-recipes.md";
+  const text = readFileSync(p, "utf8");
+  assert.ok(
+    !text.includes("Antigravity can drop a negative constraint"),
+    "recipes.md must not attribute dropped constraints to Antigravity's model behaviour",
+  );
+  assert.ok(
+    text.includes("a negative constraint that appears too early is the one most often dropped"),
+    "recipes.md must ground the claim in the print-mode interface, consistent with antipatterns.md item 4",
+  );
+});

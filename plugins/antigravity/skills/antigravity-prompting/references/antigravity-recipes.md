@@ -1,6 +1,6 @@
 # Antigravity prompt recipes (print mode)
 
-Copy a template, fill the brackets, and pass it as the task to the companion. Order matters: material first, instruction last, "do NOT touch" constraints at the very end (Antigravity can drop a negative constraint that appears too early). Print mode can't ask follow-ups, so leave no blanks.
+Copy a template, fill the brackets, and pass it as the task to the companion. Order matters: material first, instruction last, "do NOT touch" constraints at the very end (a negative constraint that appears too early is the one most often dropped). Print mode can't ask follow-ups, so leave no blanks.
 
 Companion calls referenced below:
 - `delegate <task...>` — write-capable; add `--read-only` or `--sandbox` to contain it.
