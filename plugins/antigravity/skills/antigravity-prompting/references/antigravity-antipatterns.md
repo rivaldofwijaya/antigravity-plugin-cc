@@ -70,10 +70,11 @@ The mistakes that waste a delegate run, and how to fix each. Grounded in establi
 
 ### 9. Re-prompting through a quota wall
 
-**Mistake:** A run returns empty or the companion reports `RESOURCE_EXHAUSTED (429) ... Resets in <dur>`, and you immediately fire the same task again. Preview quota is exhausted; retrying burns nothing useful.
+**Mistake:** The companion reports `RESOURCE_EXHAUSTED (429) ... Resets in <dur>` and you immediately fire the same task again. Preview quota is gone; the retry spends an attempt and changes nothing.
 
 **Fix:** Read the reset window the companion surfaced and wait for it. Use the time to tighten the prompt so the next run lands on the first try.
 
+An `empty` result is a different case and must not be treated as this one. `empty` means the run finished with no output *and* no error, and the companion classifies quota exhaustion separately by scanning the log — so silence on its own is not evidence of a quota wall, and neither is it evidence of a clean result. Say the run produced no output, read the log path the companion printed, and continue the same conversation with `resume`.
 ---
 
 ### 10. Throwing away the conversation

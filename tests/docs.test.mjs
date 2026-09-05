@@ -52,3 +52,20 @@ test("package.json points at this fork, not upstream", () => {
     url: "https://github.com/rivaldofwijaya/antigravity-plugin-cc.git",
   });
 });
+
+test("anti-pattern 9 separates an empty run from quota exhaustion", () => {
+  const p = "plugins/antigravity/skills/antigravity-prompting/references/antigravity-antipatterns.md";
+  const text = readFileSync(p, "utf8");
+  assert.ok(
+    !/A run returns empty or the companion reports/.test(text),
+    "anti-pattern 9 must not group an empty run with a quota error",
+  );
+  assert.ok(
+    text.includes("An `empty` result is a different case and must not be treated as this one."),
+    "anti-pattern 9 must state the empty/quota distinction",
+  );
+  assert.ok(
+    text.includes("the companion classifies quota exhaustion separately by scanning the log"),
+    "anti-pattern 9 must say where the quota classification comes from",
+  );
+});
