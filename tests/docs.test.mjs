@@ -69,3 +69,21 @@ test("anti-pattern 9 separates an empty run from quota exhaustion", () => {
     "anti-pattern 9 must say where the quota classification comes from",
   );
 });
+
+test("a timeout is inspected before it is retried", () => {
+  const p = "plugins/antigravity/skills/antigravity-result-handling/SKILL.md";
+  const text = readFileSync(p, "utf8");
+  assert.ok(text.includes("**A timeout is not a rollback.**"), "Case 5 must say a timeout is not a rollback");
+  assert.ok(
+    text.includes("Before proposing any re-run, check what survived"),
+    "Case 5 must require inspecting surviving work before a retry",
+  );
+  assert.ok(
+    text.includes("Prefer the exact conversation id over “most recent”"),
+    "Case 5 must prefer the exact conversation id",
+  );
+  assert.ok(
+    /\| Backend error \/ timeout \|.*check what survived/.test(text),
+    "the quick-reference row must carry the inspect-first instruction",
+  );
+});
