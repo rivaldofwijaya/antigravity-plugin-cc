@@ -25,6 +25,8 @@ The subagent makes **exactly one** Bash call to `delegate` and returns its stdou
 - Do not chain calls or call any other subcommand.
 - Pass the user's task and any caller-supplied flags straight through.
 
+Baseline capture, repository inspection, and result interpretation belong to the controller that invoked this subagent — before and after the single call, never inside it. Adding a `git status` here would break the one rule; the controller already has the skills that require it.
+
 The companion owns binary detection, sandboxing, timeouts, the conversation id, and quota handling (on `RESOURCE_EXHAUSTED` it surfaces the reset window recovered from the log). The subagent's job is to forward and relay.
 
 ## Flags on `delegate`

@@ -87,3 +87,29 @@ test("a timeout is inspected before it is retried", () => {
     "the quick-reference row must carry the inspect-first instruction",
   );
 });
+
+test("a write-capable run is measured against a recorded baseline", () => {
+  const prompting = readFileSync("plugins/antigravity/skills/antigravity-prompting/SKILL.md", "utf8");
+  const result = readFileSync("plugins/antigravity/skills/antigravity-result-handling/SKILL.md", "utf8");
+  const runtime = readFileSync("plugins/antigravity/skills/antigravity-cli-runtime/SKILL.md", "utf8");
+  assert.ok(
+    prompting.replace(/\s+/g, " ").includes("record the starting state — `git status --porcelain` and the current commit"),
+    "prompting must require a pre-run baseline",
+  );
+  assert.ok(
+    result.includes("against the baseline taken before the run"),
+    "result handling must compare against the baseline",
+  );
+  assert.ok(
+    result.includes("Changes that were already there are the developer's"),
+    "result handling must not attribute pre-existing changes to Antigravity",
+  );
+  assert.ok(
+    /belong(?:s)? to the controller that invoked this subagent/.test(runtime),
+    "the runtime contract must place the checks outside the forwarder",
+  );
+  assert.ok(
+    runtime.includes("exactly one") && runtime.includes("verbatim"),
+    "the thin-forwarder contract must survive intact",
+  );
+});

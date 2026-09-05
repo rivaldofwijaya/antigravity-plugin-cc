@@ -48,8 +48,15 @@ Keep it tight. A focused 8-line brief beats a 40-line essay; over-stuffed contex
 None of these is a hard write barrier. The companion passes
 `--dangerously-skip-permissions` by default because `agy` cannot act in print
 mode without it; `--no-yolo` is the user's explicit opt-out and suppresses that
-flag. The sandbox, plan mode, and no-write preamble are defence in depth; after
-every run, check `git status` before claiming that the real tree was untouched.
+flag. The sandbox, plan mode, and no-write preamble are defence in depth, not a hard
+barrier. Before a write-capable run, record the starting state — `git status --porcelain`
+and the current commit — so that afterwards you can tell what Antigravity did from what
+was already in the tree. Preserve the pre-existing staged and unstaged diffs
+(`git diff --cached --binary` and `git diff --binary`) and a content snapshot of
+relevant untracked files, including new files inside untracked directories. Status
+and commit alone cannot distinguish later edits within an already dirty file.
+Keep the baseline outside the delegated workspace. After the run, compare against that record before claiming the
+real tree was untouched or crediting any change to Antigravity.
 
 If you're unsure whether a task should write, start with `--plan` for a plan or
 `--read-only` for investigation, then re-run write-capable (or `resume` the
