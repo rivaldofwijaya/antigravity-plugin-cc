@@ -66,7 +66,7 @@ Job ids look like `agy-<id>`; conversation ids are UUIDs. `status`, `result`, an
 
 ## Notes
 
-**Containment:** `agy` has no true read-only mode. `--read-only` and `--sandbox` narrow what it can touch, but they don't make writes impossible, so check `git status` when it matters.
+**Containment:** `agy` has no true read-only mode. `--read-only` and `--sandbox` narrow what it can touch, but they don't make writes impossible. Record a baseline before any run (`git status --porcelain`, the current commit, and the pre-existing staged and unstaged diffs) and compare against it afterwards — a bare `git status` after the fact can't tell Antigravity's edits from what was already in your tree.
 
 **Choosing the model:** `--model <id>` selects a model per run; `agy models` lists the current IDs. Add `--effort low|medium|high` to choose reasoning effort. With no `--model`, `agy` uses the default set with `/model` in its TUI.
 

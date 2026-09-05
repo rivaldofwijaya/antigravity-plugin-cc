@@ -68,6 +68,30 @@ test("anti-pattern 9 separates an empty run from quota exhaustion", () => {
     text.includes("the companion classifies quota exhaustion separately by scanning the log"),
     "anti-pattern 9 must say where the quota classification comes from",
   );
+  assert.ok(
+    /\n\n---\n/.test(text.slice(text.indexOf("An `empty` result is a different case"))),
+    "the empty/quota paragraph must be followed by a blank line, or the `---` renders as a setext heading",
+  );
+});
+
+test("the anti-patterns reference does not restate the universal model-behaviour claims", () => {
+  const p = "plugins/antigravity/skills/antigravity-prompting/references/antigravity-antipatterns.md";
+  const text = readFileSync(p, "utf8");
+  for (const claim of [
+    "Antigravity follows instructions literally",
+    "Antigravity handles long context well",
+    "In a long prompt, Antigravity can drop",
+  ]) {
+    assert.ok(!text.includes(claim), `antipatterns.md must not restate the removed claim: "${claim}"`);
+  }
+  assert.ok(
+    text.includes("Print mode cannot ask which one you meant"),
+    "item 1 must ground the vague-goal cost in the print-mode interface",
+  );
+  assert.ok(
+    text.includes("a negative or quantitative constraint that appears early is the one most often dropped"),
+    "item 4 must ground constraint ordering in observed prompt behaviour, not a model claim",
+  );
 });
 
 test("a timeout is inspected before it is retried", () => {
@@ -85,6 +109,22 @@ test("a timeout is inspected before it is retried", () => {
   assert.ok(
     /\| Backend error \/ timeout \|.*check what survived/.test(text),
     "the quick-reference row must carry the inspect-first instruction",
+  );
+  assert.ok(
+    text.includes("an absence of visible edits does not prove it stopped"),
+    "the garbled double-negative clause must be repaired",
+  );
+  assert.ok(
+    /\*\*Foreground timeout\.\*\*[^\n]*already dead/.test(text),
+    "Case 5 must resolve terminal state for a foreground timeout without a status check",
+  );
+  assert.ok(
+    text.includes("/antigravity:cancel") && /\*\*`--background` job\.\*\*/.test(text),
+    "Case 5 must name the cancel command on the background path",
+  );
+  assert.ok(
+    text.includes("records the signal the companion sent, not a confirmed exit"),
+    "Case 5 must warn that a reported cancellation is not a confirmed exit",
   );
 });
 
@@ -112,6 +152,27 @@ test("a write-capable run is measured against a recorded baseline", () => {
     runtime.includes("exactly one") && runtime.includes("verbatim"),
     "the thin-forwarder contract must survive intact",
   );
+  // The baseline requirement must cover every delegation, because Case 1 requires a
+  // saved baseline for --read-only / --sandbox / --plan runs too.
+  assert.ok(
+    prompting.replace(/\s+/g, " ").includes("before every delegation, not only a write-capable one"),
+    "the baseline requirement must cover contained runs, not only write-capable ones",
+  );
+  assert.ok(
+    result.includes("comparison against the saved baseline"),
+    "Case 1 must still require the contained-run comparison the prompting skill now provisions",
+  );
+  for (const p of ["README.md", "plugins/antigravity/commands/review.md"]) {
+    const text = readFileSync(p, "utf8");
+    assert.ok(
+      /Record a baseline before any run|record a baseline before the run/.test(text),
+      `${p} must ask for a pre-run baseline, not a bare post-hoc git status`,
+    );
+    assert.ok(
+      !/so check `git status` when it matters|check `git status` afterwards/.test(text),
+      `${p} must not prescribe a bare post-hoc git status`,
+    );
+  }
 });
 
 test("prompting guidance does not claim uniform behaviour across served models", () => {

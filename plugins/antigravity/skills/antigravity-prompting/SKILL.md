@@ -53,9 +53,11 @@ None of these is a hard write barrier. The companion passes
 `--dangerously-skip-permissions` by default because `agy` cannot act in print
 mode without it; `--no-yolo` is the user's explicit opt-out and suppresses that
 flag. The sandbox, plan mode, and no-write preamble are defence in depth, not a hard
-barrier. Before a write-capable run, record the starting state — `git status --porcelain`
-and the current commit — so that afterwards you can tell what Antigravity did from what
-was already in the tree. Preserve the pre-existing staged and unstaged diffs
+barrier. So before every delegation, not only a write-capable one, record the starting
+state — `git status --porcelain` and the current commit — so that afterwards you can tell
+what Antigravity did from what was already in the tree. A `--sandbox`, `--read-only`, or
+`--plan` run needs the same baseline: containment narrows what it can touch, so the
+baseline is what lets you say nothing was applied instead of assuming it. Preserve the pre-existing staged and unstaged diffs
 (`git diff --cached --binary` and `git diff --binary`) and a content snapshot of
 relevant untracked files, including new files inside untracked directories. Status
 and commit alone cannot distinguish later edits within an already dirty file.
